@@ -71,6 +71,9 @@ curl http://localhost:8000/health
 # 動画アップロード（.mp4 / .mov / .m4v）
 curl -F "file=@your_video.mp4" http://localhost:8000/videos/upload
 
+# 動画情報取得（アップロード後に返ったvideo_idを使う）
+curl http://localhost:8000/videos/info/{video_id}
+
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く
 ```
