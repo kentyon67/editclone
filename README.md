@@ -68,6 +68,9 @@ uvicorn app.main:app --reload
 # ヘルスチェック
 curl http://localhost:8000/health
 
+# 動画アップロード（.mp4 / .mov / .m4v）
+curl -F "file=@your_video.mp4" http://localhost:8000/videos/upload
+
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く
 ```
