@@ -17,7 +17,7 @@ YouTuber・ショート動画制作者が、自分や参考動画の編集スタ
 
 ## 現在のフェーズ
 
-**Phase 0: ドキュメント整備中**（コード実装はまだ行っていません）
+**Phase 1: MVP実装中**（FastAPI基盤）
 
 ## MVPの機能範囲
 
@@ -44,15 +44,32 @@ YouTuber・ショート動画制作者が、自分や参考動画の編集スタ
 - [アーキテクチャ](docs/architecture.md)
 - [開発ルール](CLAUDE.md)
 
-## セットアップ（将来予定）
+## セットアップ
 
 ```bash
 git clone https://github.com/kentyon67/editclone.git
 cd editclone
+
+# 仮想環境の作成・有効化
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # macOS / Linux
+
+# 依存パッケージのインストール
 pip install -r requirements.txt
+
+# サーバー起動
 uvicorn app.main:app --reload
+```
+
+起動後、以下で動作確認できます。
+
+```bash
+# ヘルスチェック
+curl http://localhost:8000/health
+
+# API仕様（Swagger UI）
+# ブラウザで http://localhost:8000/docs を開く
 ```
 
 ## ライセンス
