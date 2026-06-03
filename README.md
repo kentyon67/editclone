@@ -81,6 +81,12 @@ curl -X POST http://localhost:8000/videos/transcribe/{video_id}
 # tiny=75MB / base=145MB / small=461MB / medium=1.5GB
 WHISPER_MODEL=small uvicorn app.main:app --reload
 
+# 無音検出（デフォルト: -30dB / 最小0.5秒）
+curl -X POST http://localhost:8000/videos/detect-silence/{video_id}
+
+# パラメータ指定
+curl -X POST "http://localhost:8000/videos/detect-silence/{video_id}?noise_db=-40&min_duration=0.3"
+
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く
 ```

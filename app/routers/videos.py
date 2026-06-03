@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.services.silence import detect_silence
 from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info, find_video
 
@@ -57,3 +58,22 @@ def transcribe(video_id: str):
 
     result = transcribe_video(path)
     return {"video_id": video_id, **result}
+
+
+@router.post("/detect-silence/{video_id}")
+def silence_detection(
+    video_id: str,
+    noise_db: float = -30.0,
+    min_duration: float = 0.5,
+):
+    path = find_video(video_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
+
+    segments = detect_silence(path, noise_db=noise_db, min_duration=min_duration)
+    return {
+        "video_id": video_id,
+        "noise_threshold_db": noise_db,
+        "min_duration_seconds": min_duration,
+        "silence_segments": segments,
+    }
