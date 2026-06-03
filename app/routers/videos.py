@@ -3,7 +3,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from fastapi.responses import Response
+
 from app.services.cut_suggestion import suggest_cuts
+from app.services.fcpxml import build_fcpxml
 from app.services.silence import detect_silence
 from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info, find_video
@@ -98,3 +101,21 @@ def cut_suggestions(
         "cut_count": len(cuts),
         "cuts": cuts,
     }
+
+
+@router.post("/generate-fcpxml/{video_id}")
+def generate_fcpxml(
+    video_id: str,
+    noise_db: float = -30.0,
+    min_duration: float = 0.5,
+):
+    path = find_video(video_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
+
+    xml_content = build_fcpxml(path, noise_db=noise_db, min_duration=min_duration)
+    return Response(
+        content=xml_content,
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="{video_id}.fcpxml"'},
+    )

@@ -87,6 +87,12 @@ curl -X POST http://localhost:8000/videos/detect-silence/{video_id}
 # パラメータ指定
 curl -X POST "http://localhost:8000/videos/detect-silence/{video_id}?noise_db=-40&min_duration=0.3"
 
+# カット提案
+curl -X POST http://localhost:8000/videos/suggest-cuts/{video_id}
+
+# FCPXML生成（.fcpxmlファイルとしてダウンロード）
+curl -X POST http://localhost:8000/videos/generate-fcpxml/{video_id} -o project.fcpxml
+
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く
 ```
