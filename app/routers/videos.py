@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info, find_video
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -46,3 +47,13 @@ def get_video_info(video_id: str):
 
     info = extract_video_info(path)
     return {"video_id": video_id, "filename": path.name, **info}
+
+
+@router.post("/transcribe/{video_id}")
+def transcribe(video_id: str):
+    path = find_video(video_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
+
+    result = transcribe_video(path)
+    return {"video_id": video_id, **result}

@@ -74,6 +74,13 @@ curl -F "file=@your_video.mp4" http://localhost:8000/videos/upload
 # 動画情報取得（アップロード後に返ったvideo_idを使う）
 curl http://localhost:8000/videos/info/{video_id}
 
+# 文字起こし（初回はWhisperモデル約145MBが自動ダウンロードされる）
+curl -X POST http://localhost:8000/videos/transcribe/{video_id}
+
+# モデルサイズ変更（デフォルト: base）
+# tiny=75MB / base=145MB / small=461MB / medium=1.5GB
+WHISPER_MODEL=small uvicorn app.main:app --reload
+
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く
 ```
