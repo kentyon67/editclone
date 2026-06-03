@@ -90,8 +90,19 @@ curl -X POST "http://localhost:8000/videos/detect-silence/{video_id}?noise_db=-4
 # カット提案
 curl -X POST http://localhost:8000/videos/suggest-cuts/{video_id}
 
-# FCPXML生成（.fcpxmlファイルとしてダウンロード）
-curl -X POST http://localhost:8000/videos/generate-fcpxml/{video_id} -o project.fcpxml
+# FCPXML生成（動画 + FCPXMLをZIPでダウンロード）
+curl -X POST http://localhost:8000/videos/generate-fcpxml/{video_id} -o project.zip
+
+# ZIPの内容:
+#   {video_id}.fcpxml  ← Final Cut Proプロジェクト
+#   media/
+#     original.mp4     ← 元動画
+#
+# 使い方:
+#   1. ZIPを解凍
+#   2. {video_id}.fcpxml をダブルクリック → Final Cut Proで開く
+#   3. 「メディアオフライン」が表示されたら右クリック → 「ファイルを再リンク」
+#   4. media/ フォルダ内の動画を選択 → 完了
 
 # API仕様（Swagger UI）
 # ブラウザで http://localhost:8000/docs を開く

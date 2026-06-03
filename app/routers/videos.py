@@ -1,8 +1,9 @@
+import io
 import uuid
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-
 from fastapi.responses import Response
 
 from app.services.cut_suggestion import suggest_cuts
@@ -114,8 +115,15 @@ def generate_fcpxml(
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
 
     xml_content = build_fcpxml(path, noise_db=noise_db, min_duration=min_duration)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"{video_id}.fcpxml", xml_content)
+        zf.write(path, f"media/{path.name}")
+    buf.seek(0)
+
     return Response(
-        content=xml_content,
-        media_type="application/xml",
-        headers={"Content-Disposition": f'attachment; filename="{video_id}.fcpxml"'},
+        content=buf.read(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{video_id}_editclone.zip"'},
     )

@@ -74,7 +74,7 @@ def build_fcpxml(
     })
     ET.SubElement(asset, "media-rep", {
         "kind": "original-media",
-        "src": video_path.resolve().as_uri(),
+        "src": f"file://localhost/EDITCLONE_MEDIA/{video_path.name}",
     })
 
     # --- library > event > project > sequence > spine ---
