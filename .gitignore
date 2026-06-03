@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .env
 
+# IDE
+.idea/
+
 # アップロードされた動画ファイルはGit管理しない
 uploads/*
 !uploads/.gitkeep
