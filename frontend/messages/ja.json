@@ -181,7 +181,8 @@
   "results": {
     "title": "処理完了",
     "subtitle": "以下のファイルをダウンロードできます",
-    "downloadAll": "全てダウンロード (ZIP)",
+    "downloadAll": "FCPXMLパッケージ (ZIP)",
+    "downloadMp4": "編集済みMP4をダウンロード",
     "fcpxml": {
       "title": "FCPXML",
       "description": "Final Cut Proで開くプロジェクトファイル",

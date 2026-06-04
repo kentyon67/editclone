@@ -2,9 +2,10 @@
 import { useTranslations, useLocale } from "next-intl";
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Film, Settings, Loader2, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight } from "lucide-react";
 import Header from "@/components/Header";
-import { uploadVideo, startProcessing } from "@/lib/api";
+import { uploadVideo, startProcessing, ApiError } from "@/lib/api";
 
 export default function UploadPage() {
   const t = useTranslations("upload");
@@ -18,6 +19,7 @@ export default function UploadPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [status, setStatus] = useState<"idle" | "uploading" | "processing">("idle");
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -31,6 +33,7 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file) return;
     setError("");
+    setErrorCode(null);
 
     try {
       setStatus("uploading");
@@ -44,7 +47,12 @@ export default function UploadPage() {
 
       router.push(`/${locale}/results/${job.job_id}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Error occurred");
+      if (err instanceof ApiError) {
+        setError(err.message);
+        setErrorCode(err.code ?? null);
+      } else {
+        setError(err instanceof Error ? err.message : "Error occurred");
+      }
       setStatus("idle");
     }
   }
@@ -147,7 +155,26 @@ export default function UploadPage() {
           )}
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>
+            <div className={`p-4 rounded-xl border text-sm ${
+              errorCode === "LIMIT_EXCEEDED" || errorCode === "DURATION_EXCEEDED"
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : "bg-red-50 border-red-200 text-red-600"
+            }`}>
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p>{error}</p>
+                  {(errorCode === "LIMIT_EXCEEDED" || errorCode === "DURATION_EXCEEDED") && (
+                    <Link
+                      href={`/${locale}/pricing`}
+                      className="inline-flex items-center gap-1 mt-2 font-semibold text-purple-700 hover:text-purple-900"
+                    >
+                      プランをアップグレード <ArrowUpRight className="w-3 h-3" />
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
           <button

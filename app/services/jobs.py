@@ -1,12 +1,15 @@
 import io
+import tempfile
 import zipfile
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from app.services.analytics import log_event
 from app.services.chapters import format_youtube_description, generate_chapters
 from app.services.cut_suggestion import suggest_cuts
 from app.services.fcpxml import build_fcpxml
+from app.services.mp4_render import render_mp4
 from app.services.srt import generate_srt
 from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info
@@ -77,6 +80,16 @@ def run_job(job_id: str) -> None:
         job.progress = "FCPXMLを生成中..."
         xml_content = build_fcpxml(path, noise_db=job.noise_db, min_duration=job.min_duration)
 
+        job.progress = "MP4をレンダリング中..."
+        mp4_bytes: bytes | None = None
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                mp4_path = Path(tmpdir) / f"{job.video_id}.mp4"
+                if render_mp4(path, cuts, mp4_path) and mp4_path.exists():
+                    mp4_bytes = mp4_path.read_bytes()
+        except Exception:
+            pass
+
         job.progress = "ZIPにまとめています..."
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -96,11 +109,17 @@ def run_job(job_id: str) -> None:
             "youtube_description": youtube_desc,
             "srt": srt_content,
             "zip_bytes": zip_bytes,
+            "mp4_bytes": mp4_bytes,
         }
         job.status = JobStatus.completed
         job.completed_at = datetime.utcnow().isoformat()
+        log_event("process_complete", video_id=job.video_id, job_id=job.id,
+                  metadata={"cut_count": len(cuts), "has_mp4": mp4_bytes is not None,
+                            "duration_seconds": info.get("duration_seconds")})
 
     except Exception as exc:
         job.status = JobStatus.failed
         job.error = str(exc)
         job.completed_at = datetime.utcnow().isoformat()
+        log_event("process_failed", video_id=job.video_id, job_id=job.id,
+                  metadata={"error": str(exc)})

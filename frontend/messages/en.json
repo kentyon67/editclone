@@ -181,7 +181,8 @@
   "results": {
     "title": "Processing Complete",
     "subtitle": "Your files are ready to download",
-    "downloadAll": "Download All (ZIP)",
+    "downloadAll": "FCPXML Package (ZIP)",
+    "downloadMp4": "Download Edited MP4",
     "fcpxml": {
       "title": "FCPXML",
       "description": "Project file for Final Cut Pro",

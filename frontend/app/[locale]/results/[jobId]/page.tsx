@@ -4,10 +4,10 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Download, Copy, Check, FileVideo, Captions, BookOpen,
-  FileText, Loader2, CheckCircle, XCircle, ArrowLeft
+  FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film
 } from "lucide-react";
 import Header from "@/components/Header";
-import { getJobStatus, getDownloadUrl, JobStatusResponse } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";
 
 function ProcessingView({ progress }: { progress: string }) {
   const t = useTranslations("processing");
@@ -78,14 +78,26 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         <p className="text-gray-500">{t("subtitle")}</p>
       </div>
 
-      <a
-        href={downloadUrl}
-        download
-        className="flex items-center justify-center gap-3 w-full py-4 mb-6 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-purple-200"
-      >
-        <Download className="w-5 h-5" />
-        {t("downloadAll")}
-      </a>
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <a
+          href={downloadUrl}
+          download
+          className="flex-1 flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-purple-200"
+        >
+          <Download className="w-5 h-5" />
+          {t("downloadAll")}
+        </a>
+        {result.has_mp4 && (
+          <a
+            href={getMp4Url(job.job_id)}
+            download
+            className="flex-1 flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-green-200"
+          >
+            <Film className="w-5 h-5" />
+            {t("downloadMp4")}
+          </a>
+        )}
+      </div>
 
       <div className="space-y-4">
         <div className="bg-white rounded-2xl p-5 border border-purple-100">

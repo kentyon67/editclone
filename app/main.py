@@ -3,9 +3,7 @@ import os
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.routers import videos
-from app.routers import jobs
-from app.routers import billing
+from app.routers import billing, jobs, usage, videos
 
 app = FastAPI(title="EditClone", version="0.3.0")
 
@@ -23,6 +21,7 @@ app.add_middleware(
 app.include_router(videos.router)
 app.include_router(jobs.router)
 app.include_router(billing.router)
+app.include_router(usage.router)
 
 
 @app.get("/health")

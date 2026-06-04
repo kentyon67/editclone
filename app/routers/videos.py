@@ -3,9 +3,11 @@ import uuid
 import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from app.middleware.auth import require_user
+from app.services.analytics import log_event
 from app.services.chapters import format_youtube_description, generate_chapters
 from app.services.cut_suggestion import suggest_cuts
 from app.services.fcpxml import build_fcpxml
@@ -13,6 +15,13 @@ from app.services.jobs import create_job, run_job
 from app.services.silence import detect_silence
 from app.services.srt import generate_srt
 from app.services.transcription import transcribe_video
+from app.services.usage import (
+    DurationExceededError,
+    LimitExceededError,
+    check_and_increment,
+    check_duration,
+    get_user_plan,
+)
 from app.services.video_info import extract_video_info, find_video
 
 router = APIRouter(prefix="/videos", tags=["videos"])
@@ -22,7 +31,10 @@ ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
 
 
 @router.post("/upload")
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_user),
+):
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -39,6 +51,9 @@ async def upload_video(file: UploadFile = File(...)):
     content = await file.read()
     save_path.write_bytes(content)
 
+    log_event("upload", user_id=user["id"], video_id=video_id,
+              metadata={"filename": file.filename, "size_bytes": len(content)})
+
     return {
         "video_id": video_id,
         "filename": file.filename,
@@ -49,7 +64,7 @@ async def upload_video(file: UploadFile = File(...)):
 
 
 @router.get("/info/{video_id}")
-def get_video_info(video_id: str):
+def get_video_info(video_id: str, user: dict = Depends(require_user)):
     path = find_video(video_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
@@ -59,7 +74,7 @@ def get_video_info(video_id: str):
 
 
 @router.post("/transcribe/{video_id}")
-def transcribe(video_id: str):
+def transcribe(video_id: str, user: dict = Depends(require_user)):
     path = find_video(video_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
@@ -73,6 +88,7 @@ def silence_detection(
     video_id: str,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    user: dict = Depends(require_user),
 ):
     path = find_video(video_id)
     if path is None:
@@ -92,6 +108,7 @@ def cut_suggestions(
     video_id: str,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    user: dict = Depends(require_user),
 ):
     path = find_video(video_id)
     if path is None:
@@ -112,6 +129,7 @@ def generate_fcpxml(
     video_id: str,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    user: dict = Depends(require_user),
 ):
     path = find_video(video_id)
     if path is None:
@@ -133,7 +151,7 @@ def generate_fcpxml(
 
 
 @router.post("/chapters/{video_id}")
-def chapters(video_id: str):
+def chapters(video_id: str, user: dict = Depends(require_user)):
     path = find_video(video_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
@@ -148,7 +166,7 @@ def chapters(video_id: str):
 
 
 @router.post("/export-srt/{video_id}")
-def export_srt(video_id: str):
+def export_srt(video_id: str, user: dict = Depends(require_user)):
     path = find_video(video_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
@@ -162,19 +180,57 @@ def export_srt(video_id: str):
 
 
 @router.post("/process/{video_id}")
-def process_video(
+async def process_video(
     video_id: str,
     background_tasks: BackgroundTasks,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    user: dict = Depends(require_user),
 ):
-    """全処理を非同期ジョブとして実行。job_idを即座に返す。"""
+    """全処理を非同期ジョブとして実行。プラン制限チェック後に job_id を即座に返す。"""
     path = find_video(video_id)
     if path is None:
         raise HTTPException(status_code=404, detail=f"Video '{video_id}' not found")
 
+    plan = get_user_plan(user["id"])
+
+    # 動画長チェック
+    info = extract_video_info(path)
+    try:
+        check_duration(info.get("duration_seconds"), plan)
+    except DurationExceededError as e:
+        mins = lambda s: f"{int(s // 60)}分{int(s % 60)}秒"
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "DURATION_EXCEEDED",
+                "plan": e.plan,
+                "duration_seconds": e.duration,
+                "max_duration_seconds": e.max_duration,
+                "message": f"動画が長すぎます（{mins(e.duration)}）。{e.plan}プランの上限は{mins(e.max_duration)}です。",
+            },
+        )
+
+    # 月次利用本数チェック＆インクリメント
+    try:
+        check_and_increment(user["id"], plan)
+    except LimitExceededError as e:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "LIMIT_EXCEEDED",
+                "plan": e.plan,
+                "current": e.current,
+                "limit": e.limit,
+                "message": f"今月の処理上限に達しました（{e.current}/{e.limit}本）。アップグレードしてください。",
+            },
+        )
+
     job = create_job(video_id, path, noise_db, min_duration)
     background_tasks.add_task(run_job, job.id)
+
+    log_event("process_start", user_id=user["id"], video_id=video_id, job_id=job.id,
+              metadata={"plan": plan, "duration_seconds": info.get("duration_seconds")})
 
     return {
         "job_id": job.id,
