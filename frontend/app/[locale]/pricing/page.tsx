@@ -1,13 +1,44 @@
+"use client";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
-import { CheckCircle, ArrowRight } from "lucide-react";
+import { CheckCircle, ArrowRight, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { createCheckout } from "@/lib/api";
 
 export default function PricingPage() {
   const t = useTranslations("pricing");
   const locale = useLocale();
+  const router = useRouter();
   const planKeys = ["free", "pro", "creator", "studio"] as const;
+  const [loading, setLoading] = useState<string | null>(null);
+
+  async function handlePlanClick(key: string) {
+    if (key === "free") {
+      router.push(`/${locale}/signup`);
+      return;
+    }
+    if (key === "studio") {
+      window.location.href = `mailto:hello@editclone.app?subject=Studioプランについて`;
+      return;
+    }
+    setLoading(key);
+    try {
+      const origin = window.location.origin;
+      const { checkout_url } = await createCheckout(
+        key as "pro" | "creator",
+        `${origin}/${locale}/dashboard`,
+        `${origin}/${locale}/pricing`
+      );
+      window.location.href = checkout_url;
+    } catch {
+      router.push(`/${locale}/signup`);
+    } finally {
+      setLoading(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -22,6 +53,7 @@ export default function PricingPage() {
           {planKeys.map((key) => {
             const isHighlighted = key === "pro";
             const features = t.raw(`plans.${key}.features`) as string[];
+            const isLoading = loading === key;
 
             return (
               <div
@@ -63,16 +95,18 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link
-                  href={`/${locale}/signup`}
-                  className={`flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all ${
+                <button
+                  onClick={() => handlePlanClick(key)}
+                  disabled={isLoading}
+                  className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-70 ${
                     isHighlighted
                       ? "bg-white text-purple-700 hover:bg-purple-50"
                       : "bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90"
                   }`}
                 >
-                  {t(`plans.${key}.cta`)} <ArrowRight className="w-4 h-4" />
-                </Link>
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                  {t(`plans.${key}.cta`)}
+                </button>
               </div>
             );
           })}
