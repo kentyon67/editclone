@@ -1,0 +1,217 @@
+{
+  "nav": {
+    "features": "機能",
+    "pricing": "料金",
+    "login": "ログイン",
+    "signup": "無料で始める",
+    "dashboard": "ダッシュボード",
+    "account": "アカウント",
+    "logout": "ログアウト"
+  },
+  "hero": {
+    "badge": "Final Cut Pro向けAI編集アシスタント",
+    "title": "あなたの編集スタイルを",
+    "titleAccent": "AIが再現する",
+    "description": "動画をアップロードするだけ。AIが編集スタイルを分析し、無音カット・字幕・チャプターを自動生成。Final Cut Pro用FCPXMLをワンクリックで出力します。",
+    "cta": "無料で試す",
+    "ctaSub": "クレジットカード不要",
+    "demo": "デモを見る"
+  },
+  "features": {
+    "title": "EditCloneでできること",
+    "subtitle": "面倒な編集作業をAIが自動化。あなたは創造的な作業に集中できます。",
+    "items": {
+      "silence": {
+        "title": "自動無音カット",
+        "description": "「えー」「あの」などの無音・沈黙を検出し、カット候補をFCPXMLに反映します。"
+      },
+      "transcript": {
+        "title": "Whisper文字起こし",
+        "description": "OpenAIのWhisperで高精度な文字起こし。SRT字幕ファイルも自動生成します。"
+      },
+      "chapters": {
+        "title": "YouTubeチャプター生成",
+        "description": "発話内容から動画のチャプターを自動生成。YouTube説明欄にそのまま貼れます。"
+      },
+      "fcpxml": {
+        "title": "FCPXML出力",
+        "description": "Final Cut Pro用のプロジェクトファイルをワンクリックで生成。すぐに編集を始められます。"
+      },
+      "srt": {
+        "title": "字幕ファイル (SRT)",
+        "description": "YouTube・TikTok・Instagramに対応したSRT形式の字幕ファイルを自動生成します。"
+      },
+      "async": {
+        "title": "バックグラウンド処理",
+        "description": "長い動画も非同期処理。アップロード後すぐにブラウザを閉じても処理を続けます。"
+      }
+    }
+  },
+  "howItWorks": {
+    "title": "使い方は3ステップ",
+    "steps": {
+      "upload": {
+        "step": "01",
+        "title": "動画をアップロード",
+        "description": "MP4・MOV・M4V形式に対応。ドラッグ＆ドロップで簡単アップロード。"
+      },
+      "analyze": {
+        "step": "02",
+        "title": "AIが自動分析",
+        "description": "Whisperが文字起こし、ffmpegが無音検出、AIがチャプターを生成します。"
+      },
+      "download": {
+        "step": "03",
+        "title": "ZIPでダウンロード",
+        "description": "FCPXML・SRT・チャプターテキストをまとめてダウンロード。Final Cut Proで即使用可能。"
+      }
+    }
+  },
+  "pricing": {
+    "title": "料金プラン",
+    "subtitle": "まずは無料で試してください。いつでもアップグレードできます。",
+    "monthly": "月払い",
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "¥0",
+        "period": "ずっと無料",
+        "description": "まず試してみたい方へ",
+        "features": ["月3本まで", "全機能利用可能", "FCPXML出力", "SRT字幕", "YouTubeチャプター"],
+        "cta": "無料で始める",
+        "highlighted": false
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "¥980",
+        "period": "月",
+        "description": "個人YouTuberに最適",
+        "features": ["月30本まで", "全機能利用可能", "優先処理", "処理履歴30日保存", "メールサポート"],
+        "cta": "Proを始める",
+        "highlighted": true,
+        "badge": "人気"
+      },
+      "creator": {
+        "name": "Creator",
+        "price": "¥2,980",
+        "period": "月",
+        "description": "本格的なコンテンツ制作者へ",
+        "features": ["月100本まで", "全機能利用可能", "最優先処理", "処理履歴90日保存", "優先サポート"],
+        "cta": "Creatorを始める",
+        "highlighted": false
+      },
+      "studio": {
+        "name": "Studio",
+        "price": "¥9,800",
+        "period": "月",
+        "description": "チーム・企業向け",
+        "features": ["無制限", "全機能利用可能", "専用サーバー処理", "API アクセス", "専任サポート"],
+        "cta": "お問い合わせ",
+        "highlighted": false
+      }
+    }
+  },
+  "cta": {
+    "title": "今すぐ編集を効率化しよう",
+    "description": "登録無料。クレジットカード不要。1分で始められます。",
+    "button": "無料で試す"
+  },
+  "footer": {
+    "tagline": "Final Cut Pro向けAI編集アシスタント",
+    "links": {
+      "product": "プロダクト",
+      "features": "機能",
+      "pricing": "料金",
+      "changelog": "更新履歴",
+      "company": "会社情報",
+      "about": "EditCloneについて",
+      "contact": "お問い合わせ",
+      "legal": "法的情報",
+      "privacy": "プライバシーポリシー",
+      "terms": "利用規約"
+    },
+    "copyright": "© 2026 EditClone. All rights reserved."
+  },
+  "auth": {
+    "login": {
+      "title": "ログイン",
+      "subtitle": "アカウントにサインインしてください",
+      "email": "メールアドレス",
+      "password": "パスワード",
+      "submit": "ログイン",
+      "forgot": "パスワードを忘れた方",
+      "noAccount": "アカウントをお持ちでない方は",
+      "signupLink": "無料登録"
+    },
+    "signup": {
+      "title": "無料登録",
+      "subtitle": "アカウントを作成して編集を効率化",
+      "email": "メールアドレス",
+      "password": "パスワード（8文字以上）",
+      "submit": "アカウントを作成",
+      "hasAccount": "すでにアカウントをお持ちの方は",
+      "loginLink": "ログイン",
+      "terms": "利用規約とプライバシーポリシーに同意します"
+    }
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "subtitle": "動画をアップロードして自動編集を開始",
+    "upload": "動画をアップロード",
+    "noVideos": "まだ動画がありません",
+    "noVideosSub": "動画をアップロードして始めましょう",
+    "remaining": "今月の残り本数",
+    "plan": "現在のプラン",
+    "upgrade": "アップグレード"
+  },
+  "upload": {
+    "title": "動画をアップロード",
+    "dropzone": "ここに動画をドロップ",
+    "dropzoneOr": "または",
+    "browse": "ファイルを選択",
+    "formats": "MP4, MOV, M4V対応",
+    "uploading": "アップロード中...",
+    "processing": "処理中...",
+    "analyzing": "AIが分析しています",
+    "settings": "詳細設定",
+    "noiseDb": "無音検出感度 (dB)",
+    "minDuration": "最小無音時間 (秒)",
+    "submit": "処理を開始"
+  },
+  "results": {
+    "title": "処理完了",
+    "subtitle": "以下のファイルをダウンロードできます",
+    "downloadAll": "全てダウンロード (ZIP)",
+    "fcpxml": {
+      "title": "FCPXML",
+      "description": "Final Cut Proで開くプロジェクトファイル",
+      "note": "解凍後、media/フォルダの動画を再リンクしてください"
+    },
+    "srt": {
+      "title": "SRT字幕",
+      "description": "YouTube/TikTok対応の字幕ファイル"
+    },
+    "chapters": {
+      "title": "YouTubeチャプター",
+      "description": "YouTube説明欄にそのまま貼り付けできます",
+      "copy": "コピー",
+      "copied": "コピーしました"
+    },
+    "transcript": {
+      "title": "文字起こし",
+      "description": "全セグメントのテキスト"
+    },
+    "newVideo": "別の動画を処理する"
+  },
+  "processing": {
+    "title": "処理中...",
+    "subtitle": "AIが動画を分析しています",
+    "steps": {
+      "uploading": "アップロード中",
+      "transcribing": "文字起こし中",
+      "detecting": "無音検出中",
+      "generating": "FCPXML生成中",
+      "packaging": "ファイルをまとめています"
+    }
+  }
+}

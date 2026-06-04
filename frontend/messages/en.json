@@ -1,0 +1,217 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "login": "Login",
+    "signup": "Get Started Free",
+    "dashboard": "Dashboard",
+    "account": "Account",
+    "logout": "Logout"
+  },
+  "hero": {
+    "badge": "AI Editing Assistant for Final Cut Pro",
+    "title": "Your editing style,",
+    "titleAccent": "reproduced by AI",
+    "description": "Just upload your video. AI analyzes your editing style and auto-generates silence cuts, subtitles, and chapters. Export Final Cut Pro FCPXML in one click.",
+    "cta": "Try for Free",
+    "ctaSub": "No credit card required",
+    "demo": "Watch Demo"
+  },
+  "features": {
+    "title": "What EditClone can do",
+    "subtitle": "AI automates tedious editing work so you can focus on creativity.",
+    "items": {
+      "silence": {
+        "title": "Auto Silence Cutting",
+        "description": "Detects silences and pauses, reflects cut candidates in FCPXML automatically."
+      },
+      "transcript": {
+        "title": "Whisper Transcription",
+        "description": "High-accuracy transcription with OpenAI's Whisper. SRT subtitle files generated automatically."
+      },
+      "chapters": {
+        "title": "YouTube Chapter Generation",
+        "description": "Auto-generates chapters from speech content. Paste directly into YouTube descriptions."
+      },
+      "fcpxml": {
+        "title": "FCPXML Export",
+        "description": "Generate Final Cut Pro project files with one click. Start editing immediately."
+      },
+      "srt": {
+        "title": "Subtitle File (SRT)",
+        "description": "Generates SRT subtitle files compatible with YouTube, TikTok, and Instagram."
+      },
+      "async": {
+        "title": "Background Processing",
+        "description": "Long videos processed asynchronously. Close your browser after upload—processing continues."
+      }
+    }
+  },
+  "howItWorks": {
+    "title": "3 Simple Steps",
+    "steps": {
+      "upload": {
+        "step": "01",
+        "title": "Upload Your Video",
+        "description": "Supports MP4, MOV, M4V formats. Simple drag and drop upload."
+      },
+      "analyze": {
+        "step": "02",
+        "title": "AI Analyzes Automatically",
+        "description": "Whisper transcribes, ffmpeg detects silence, AI generates chapters."
+      },
+      "download": {
+        "step": "03",
+        "title": "Download as ZIP",
+        "description": "Get FCPXML, SRT, and chapter text bundled together. Ready for Final Cut Pro."
+      }
+    }
+  },
+  "pricing": {
+    "title": "Pricing Plans",
+    "subtitle": "Start free. Upgrade anytime.",
+    "monthly": "Monthly",
+    "plans": {
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "period": "forever",
+        "description": "Perfect for trying it out",
+        "features": ["3 videos/month", "All features included", "FCPXML export", "SRT subtitles", "YouTube chapters"],
+        "cta": "Get Started Free",
+        "highlighted": false
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$9",
+        "period": "month",
+        "description": "For individual YouTubers",
+        "features": ["30 videos/month", "All features included", "Priority processing", "30-day history", "Email support"],
+        "cta": "Start Pro",
+        "highlighted": true,
+        "badge": "Popular"
+      },
+      "creator": {
+        "name": "Creator",
+        "price": "$29",
+        "period": "month",
+        "description": "For serious content creators",
+        "features": ["100 videos/month", "All features included", "Highest priority", "90-day history", "Priority support"],
+        "cta": "Start Creator",
+        "highlighted": false
+      },
+      "studio": {
+        "name": "Studio",
+        "price": "$99",
+        "period": "month",
+        "description": "For teams and studios",
+        "features": ["Unlimited videos", "All features included", "Dedicated server", "API access", "Dedicated support"],
+        "cta": "Contact Us",
+        "highlighted": false
+      }
+    }
+  },
+  "cta": {
+    "title": "Start Editing Smarter Today",
+    "description": "Free to sign up. No credit card required. Ready in 1 minute.",
+    "button": "Try for Free"
+  },
+  "footer": {
+    "tagline": "AI Editing Assistant for Final Cut Pro",
+    "links": {
+      "product": "Product",
+      "features": "Features",
+      "pricing": "Pricing",
+      "changelog": "Changelog",
+      "company": "Company",
+      "about": "About",
+      "contact": "Contact",
+      "legal": "Legal",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
+    },
+    "copyright": "© 2026 EditClone. All rights reserved."
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "subtitle": "Sign in to your account",
+      "email": "Email address",
+      "password": "Password",
+      "submit": "Sign In",
+      "forgot": "Forgot your password?",
+      "noAccount": "Don't have an account?",
+      "signupLink": "Sign up free"
+    },
+    "signup": {
+      "title": "Create Account",
+      "subtitle": "Start automating your video editing",
+      "email": "Email address",
+      "password": "Password (8+ characters)",
+      "submit": "Create Account",
+      "hasAccount": "Already have an account?",
+      "loginLink": "Sign in",
+      "terms": "I agree to the Terms of Service and Privacy Policy"
+    }
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Upload a video to start auto-editing",
+    "upload": "Upload Video",
+    "noVideos": "No videos yet",
+    "noVideosSub": "Upload a video to get started",
+    "remaining": "Videos remaining this month",
+    "plan": "Current plan",
+    "upgrade": "Upgrade"
+  },
+  "upload": {
+    "title": "Upload Video",
+    "dropzone": "Drop your video here",
+    "dropzoneOr": "or",
+    "browse": "Browse files",
+    "formats": "MP4, MOV, M4V supported",
+    "uploading": "Uploading...",
+    "processing": "Processing...",
+    "analyzing": "AI is analyzing your video",
+    "settings": "Advanced Settings",
+    "noiseDb": "Silence Threshold (dB)",
+    "minDuration": "Minimum Silence Duration (s)",
+    "submit": "Start Processing"
+  },
+  "results": {
+    "title": "Processing Complete",
+    "subtitle": "Your files are ready to download",
+    "downloadAll": "Download All (ZIP)",
+    "fcpxml": {
+      "title": "FCPXML",
+      "description": "Project file for Final Cut Pro",
+      "note": "After extracting, relink media in the media/ folder"
+    },
+    "srt": {
+      "title": "SRT Subtitles",
+      "description": "Subtitle file for YouTube/TikTok"
+    },
+    "chapters": {
+      "title": "YouTube Chapters",
+      "description": "Paste directly into your YouTube description",
+      "copy": "Copy",
+      "copied": "Copied!"
+    },
+    "transcript": {
+      "title": "Transcript",
+      "description": "Full text with timestamps"
+    },
+    "newVideo": "Process Another Video"
+  },
+  "processing": {
+    "title": "Processing...",
+    "subtitle": "AI is analyzing your video",
+    "steps": {
+      "uploading": "Uploading",
+      "transcribing": "Transcribing",
+      "detecting": "Detecting silence",
+      "generating": "Generating FCPXML",
+      "packaging": "Packaging files"
+    }
+  }
+}
