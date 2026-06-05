@@ -41,8 +41,9 @@ async def plugin_get_token(body: TokenRequest):
 @router.get("/jobs")
 def plugin_list_jobs(user: dict = Depends(require_user)):
     """ユーザーの完了済みジョブ一覧（プラグイン用）。"""
-    jobs = list_user_jobs(user["id"])
-    jobs.sort(key=lambda j: j.created_at, reverse=True)
+    all_jobs = list_user_jobs(user["id"])
+    completed = [j for j in all_jobs if j.status == JobStatus.completed]
+    completed.sort(key=lambda j: j.created_at, reverse=True)
     return {
         "jobs": [
             {
@@ -56,7 +57,7 @@ def plugin_list_jobs(user: dict = Depends(require_user)):
                     if j.result else False
                 ),
             }
-            for j in jobs[:20]
+            for j in completed[:20]
         ]
     }
 

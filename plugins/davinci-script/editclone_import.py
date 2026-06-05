@@ -202,25 +202,39 @@ def main():
         show_dialog(f"EditClone API に接続できません: {e}\nAPI URL と Token を確認してください。")
         return
 
-    # 最新完成ジョブのジョブ ID を入力させる（簡易版）
-    # 将来: GUI ダイアログで選択できるようにする
-    job_id = input("インポートするジョブ ID を入力してください: ").strip()
-    if not job_id:
-        print("キャンセルしました。")
-        return
-
-    # ジョブステータス確認
+    # 完了済みジョブ一覧を取得
     try:
-        job = api_get(f"/jobs/{job_id}")
+        jobs_resp = api_get("/plugin/jobs")
+        jobs_list = jobs_resp.get("jobs", [])
     except Exception as e:
-        show_dialog(f"ジョブ取得失敗: {e}")
+        show_dialog(f"ジョブ一覧の取得に失敗しました: {e}")
         return
 
-    if job.get("status") != "completed":
-        show_dialog(f"ジョブがまだ完了していません。ステータス: {job.get('status')}")
+    if not jobs_list:
+        show_dialog("完了済みジョブが見つかりません。\nEditClone ウェブアプリで動画を処理してください。")
         return
 
-    print(f"Job found: {job_id}")
+    # 最新のジョブを自動選択（1件のみの場合）または一覧表示
+    if len(jobs_list) == 1:
+        job_id = jobs_list[0]["job_id"]
+        print(f"最新ジョブを自動選択: {jobs_list[0]['video_name']} ({job_id[:8]}...)")
+    else:
+        print("\n=== EditClone 完了済みジョブ一覧 ===")
+        for i, j in enumerate(jobs_list[:10]):
+            print(f"  [{i+1}] {j['video_name']} — {j['created_at'][:10]} ({j['job_id'][:8]}...)")
+        print()
+        try:
+            choice = input("インポートするジョブ番号を入力してください [1]: ").strip()
+            idx = int(choice) - 1 if choice else 0
+            if idx < 0 or idx >= len(jobs_list):
+                print("無効な番号です。1 番を使用します。")
+                idx = 0
+        except ValueError:
+            idx = 0
+        job_id = jobs_list[idx]["job_id"]
+        print(f"選択: {jobs_list[idx]['video_name']} ({job_id[:8]}...)")
+
+    print(f"Job ID: {job_id}")
 
     # ZIP をダウンロードして展開
     with tempfile.TemporaryDirectory() as tmpdir:
