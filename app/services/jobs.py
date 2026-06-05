@@ -1,4 +1,5 @@
 import io
+import logging
 import tempfile
 import zipfile
 from datetime import datetime
@@ -16,6 +17,8 @@ from app.services.premiere_xml import build_premiere_xml
 from app.services.srt import remap_segments_for_cuts, segments_to_srt
 from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info
+
+logger = logging.getLogger(__name__)
 
 _README_TEMPLATE = """\
 EditClone — 自動編集パッケージ
@@ -98,19 +101,186 @@ def create_job(
     job = Job(video_id, video_path, noise_db, min_duration, user_id, prompt)
     job.id = str(uuid.uuid4())
     _jobs[job.id] = job
+    _insert_job_to_supabase(job)
     return job
 
 
 def get_job(job_id: str) -> Job | None:
-    return _jobs.get(job_id)
+    job = _jobs.get(job_id)
+    if job is not None:
+        return job
+    return _load_job_from_supabase(job_id)
 
 
 def list_user_jobs(user_id: str) -> list[Job]:
-    return [
-        j for j in _jobs.values()
-        if j.user_id == user_id and j.status == JobStatus.completed
-    ]
+    from app.services.storage import USE_CLOUD
+    if USE_CLOUD and user_id:
+        try:
+            from app.services.storage import _client
+            resp = (
+                _client().table("jobs")
+                .select("*")
+                .eq("user_id", user_id)
+                .eq("status", "completed")
+                .order("created_at", desc=True)
+                .limit(20)
+                .execute()
+            )
+            jobs: list[Job] = []
+            for data in resp.data:
+                job = _reconstruct_job_from_db(data)
+                _jobs[job.id] = job
+                jobs.append(job)
+            return jobs
+        except Exception as e:
+            logger.warning("Supabase list_user_jobs failed: %s", e)
 
+    return [j for j in _jobs.values() if j.user_id == user_id and j.status == JobStatus.completed]
+
+
+# ---------------------------------------------------------------------------
+# Supabase persistence helpers
+# ---------------------------------------------------------------------------
+
+def _insert_job_to_supabase(job: Job) -> None:
+    from app.services.storage import USE_CLOUD
+    if not USE_CLOUD or not job.user_id:
+        return
+    try:
+        from app.services.storage import _client
+        _client().table("jobs").insert({
+            "id": job.id,
+            "user_id": job.user_id,
+            "video_id": job.video_id,
+            "video_filename": job.video_path.name,
+            "status": "pending",
+            "noise_db": job.noise_db,
+            "min_duration": job.min_duration,
+            "prompt": job.prompt,
+        }).execute()
+    except Exception as e:
+        logger.warning("Supabase job insert failed: %s", e)
+
+
+def _persist_to_supabase(job: Job) -> None:
+    from app.services.storage import USE_CLOUD
+    if not USE_CLOUD or not job.user_id:
+        return
+    try:
+        from app.services.storage import _client, upload_result
+        result = job.result or {}
+
+        zip_path = ""
+        zip_bytes = result.get("zip_bytes")
+        if zip_bytes:
+            try:
+                zip_path = upload_result(job.user_id, job.id, zip_bytes, "project.zip")
+            except Exception as e:
+                logger.warning("ZIP upload failed: %s", e)
+
+        mp4_path = ""
+        mp4_bytes = result.get("mp4_bytes")
+        if mp4_bytes:
+            try:
+                mp4_path = upload_result(job.user_id, job.id, mp4_bytes, "video.mp4")
+            except Exception as e:
+                logger.warning("MP4 upload failed: %s", e)
+
+        premiere_xml_bytes = result.get("premiere_xml_bytes", b"")
+        edl_bytes = result.get("edl_bytes", b"")
+
+        metadata = {
+            "info": result.get("info"),
+            "transcript": result.get("transcript"),
+            "cuts": result.get("cuts"),
+            "chapters": result.get("chapters"),
+            "youtube_description": result.get("youtube_description"),
+            "srt": result.get("srt"),
+            "has_mp4": mp4_bytes is not None,
+            "has_subtitles": result.get("has_subtitles", False),
+            "premiere_xml": premiere_xml_bytes.decode("utf-8", errors="replace") if isinstance(premiere_xml_bytes, bytes) else "",
+            "edl": edl_bytes.decode("utf-8", errors="replace") if isinstance(edl_bytes, bytes) else "",
+            "zip_path": zip_path,
+            "mp4_path": mp4_path,
+        }
+
+        update_data: dict = {
+            "status": job.status.value,
+            "completed_at": job.completed_at,
+            "result_metadata": metadata,
+        }
+        if zip_path:
+            update_data["result_zip_path"] = zip_path
+        if mp4_path:
+            update_data["result_mp4_path"] = mp4_path
+        if job.error:
+            update_data["error_message"] = job.error
+
+        _client().table("jobs").update(update_data).eq("id", job.id).execute()
+    except Exception as e:
+        logger.warning("Supabase job persist failed: %s", e)
+
+
+def _reconstruct_job_from_db(data: dict) -> Job:
+    video_filename = data.get("video_filename") or "unknown.mp4"
+    job = Job(
+        video_id=data["video_id"],
+        video_path=Path(video_filename),
+        noise_db=float(data.get("noise_db") or -30.0),
+        min_duration=float(data.get("min_duration") or 0.5),
+        user_id=str(data.get("user_id") or ""),
+        prompt=str(data.get("prompt") or ""),
+    )
+    job.id = str(data["id"])
+    job.status = JobStatus(data["status"])
+    job.created_at = str(data.get("created_at") or "")
+    completed = data.get("completed_at")
+    job.completed_at = str(completed) if completed else None
+    job.error = data.get("error_message")
+
+    metadata = data.get("result_metadata") or {}
+    if job.status == JobStatus.completed and metadata:
+        premiere_xml_str = metadata.get("premiere_xml") or ""
+        edl_str = metadata.get("edl") or ""
+        job.result = {
+            "info": metadata.get("info"),
+            "transcript": metadata.get("transcript"),
+            "cuts": metadata.get("cuts"),
+            "chapters": metadata.get("chapters"),
+            "youtube_description": metadata.get("youtube_description"),
+            "srt": metadata.get("srt"),
+            "has_mp4": metadata.get("has_mp4", False),
+            "has_subtitles": metadata.get("has_subtitles", False),
+            "zip_bytes": None,
+            "mp4_bytes": None,
+            "zip_path": metadata.get("zip_path") or data.get("result_zip_path") or "",
+            "mp4_path": metadata.get("mp4_path") or data.get("result_mp4_path") or "",
+            "premiere_xml_bytes": premiere_xml_str.encode("utf-8") if premiere_xml_str else b"",
+            "edl_bytes": edl_str.encode("utf-8") if edl_str else b"",
+        }
+    return job
+
+
+def _load_job_from_supabase(job_id: str) -> Job | None:
+    from app.services.storage import USE_CLOUD
+    if not USE_CLOUD:
+        return None
+    try:
+        from app.services.storage import _client
+        resp = _client().table("jobs").select("*").eq("id", job_id).limit(1).execute()
+        if not resp.data:
+            return None
+        job = _reconstruct_job_from_db(resp.data[0])
+        _jobs[job_id] = job
+        return job
+    except Exception as e:
+        logger.warning("Supabase load_job failed: %s", e)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Job execution
+# ---------------------------------------------------------------------------
 
 def run_job(job_id: str) -> None:
     job = _jobs.get(job_id)
@@ -138,23 +308,24 @@ def run_job(job_id: str) -> None:
         if job.prompt:
             job.progress = "AIが編集指示を解析中..."
             ai_cuts = analyze_transcript_for_cuts(
-                transcript["segments"], job.prompt, transcript["transcript"]
+                transcript["segments"], job.prompt, transcript["transcript"],
+                total_duration=total_duration,
             )
             cuts = merge_cuts(silence_cuts, ai_cuts)
         else:
             cuts = silence_cuts
 
-        # 以降はすべて transcribe / silence 結果を再利用（再実行なし）
         job.progress = "チャプター生成中..."
         chapters = generate_chapters_from_segments(transcript["segments"])
         youtube_desc = format_youtube_description(chapters)
 
         job.progress = "字幕ファイル生成中..."
-        srt_content = segments_to_srt(transcript["segments"])  # 元動画タイムスタンプ
+        srt_content = segments_to_srt(transcript["segments"])
 
         job.progress = "FCPXMLを生成中..."
         fcpxml_content = build_fcpxml(
-            path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts
+            path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts,
+            video_info=info,
         )
 
         job.progress = "Premiere XML を生成中..."
@@ -231,6 +402,7 @@ def run_job(job_id: str) -> None:
         }
         job.status = JobStatus.completed
         job.completed_at = datetime.utcnow().isoformat()
+
         log_event(
             "process_complete",
             video_id=job.video_id,
@@ -245,6 +417,9 @@ def run_job(job_id: str) -> None:
             },
         )
 
+        job.progress = "完了"
+        _persist_to_supabase(job)
+
     except Exception as exc:
         job.status = JobStatus.failed
         job.error = str(exc)
@@ -255,3 +430,4 @@ def run_job(job_id: str) -> None:
             job_id=job.id,
             metadata={"error": str(exc)},
         )
+        _persist_to_supabase(job)

@@ -45,6 +45,11 @@
 | 利用回数制限（プランごと） | ✅ | `app/services/usage.py` |
 | Analytics 基盤（Supabase ログ） | ✅ | `app/services/analytics.py` |
 | フロントエンド i18n（マルチ NLE 対応コピー） | ✅ | `frontend/messages/` |
+| Claude API 編集指示（プロンプト → セマンティックカット） | ✅ | `app/services/ai_edit.py` |
+| NLE プラグイン直接インポート（FCP/Premiere/DaVinci） | ✅ | `plugins/` |
+| Supabase ジョブ永続化（Railway 再起動耐性） | ✅ | `app/services/jobs.py` |
+| NTSC タイムコード精度修正（29.97fps） | ✅ | `app/services/fcpxml.py`, `premiere_xml.py` |
+| ダッシュボード処理履歴表示 | ✅ | `frontend/app/[locale]/dashboard/` |
 | 本番環境変数設定（Secret） | 🔄 | ユーザー手動設定待ち |
 | Supabase schema.sql 実行 | 🔄 | ユーザー手動設定待ち |
 

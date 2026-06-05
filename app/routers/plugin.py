@@ -51,7 +51,10 @@ def plugin_list_jobs(user: dict = Depends(require_user)):
                 "video_name": j.video_path.stem,
                 "filename": j.video_path.name,
                 "created_at": j.created_at,
-                "has_mp4": j.result.get("mp4_bytes") is not None if j.result else False,
+                "has_mp4": bool(
+                    (j.result.get("mp4_bytes") or j.result.get("mp4_path"))
+                    if j.result else False
+                ),
             }
             for j in jobs[:20]
         ]
@@ -64,11 +67,24 @@ def plugin_fcpxml(job_id: str, user: dict = Depends(require_user)):
     if not job or job.status != JobStatus.completed:
         raise HTTPException(404, "Job not found or not completed")
     result = job.result or {}
-    # FCPXML は ZIP 内にあるため ZIP から取り出す
-    import zipfile, io
+
+    # ZIP からFCPXML を取り出す（インメモリ or Supabase Storage）
+    import io
+    import zipfile
+
     zip_data = result.get("zip_bytes")
     if not zip_data:
+        zip_path = result.get("zip_path", "")
+        if zip_path:
+            try:
+                from app.services.storage import download_result
+                zip_data = download_result(zip_path)
+            except Exception:
+                pass
+
+    if not zip_data:
         raise HTTPException(404, "FCPXML not available")
+
     with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
         names = [n for n in zf.namelist() if n.endswith(".fcpxml")]
         if not names:

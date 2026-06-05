@@ -2,31 +2,56 @@
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Upload, Film, ChevronRight, Loader2 } from "lucide-react";
+import { Upload, Film, ChevronRight, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getUserUsage, type UsageResponse } from "@/lib/api";
+import { getUserUsage, getUserJobs, type UsageResponse, type UserJob } from "@/lib/api";
 import { setPluginMode, type PluginNLE } from "@/lib/plugin";
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function StatusBadge({ status }: { status: UserJob["status"] }) {
+  if (status === "completed") return (
+    <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+      <CheckCircle className="w-3 h-3" /> 完了
+    </span>
+  );
+  if (status === "failed") return (
+    <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+      <XCircle className="w-3 h-3" /> 失敗
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+      <Loader2 className="w-3 h-3 animate-spin" /> 処理中
+    </span>
+  );
+}
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
 
   const [usage, setUsage] = useState<UsageResponse | null>(null);
+  const [jobs, setJobs] = useState<UserJob[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // プラグインモードを URL パラメータから読み込んで sessionStorage に保存する
     const params = new URLSearchParams(window.location.search);
     const plugin = params.get("plugin") as PluginNLE;
     if (plugin && ["fcp", "premiere", "davinci"].includes(plugin)) {
       setPluginMode(plugin);
     }
 
-    getUserUsage()
-      .then(setUsage)
-      .catch(() => setUsage({ plan: "free", used: 0, limit: 3, remaining: 3, max_duration_seconds: 180 }))
-      .finally(() => setLoading(false));
+    Promise.allSettled([
+      getUserUsage().then(setUsage).catch(() =>
+        setUsage({ plan: "free", used: 0, limit: 3, remaining: 3, max_duration_seconds: 180 })
+      ),
+      getUserJobs().then((d) => setJobs(d.jobs)).catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, []);
 
   const plan = usage?.plan ?? "free";
@@ -114,11 +139,56 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        <div className="text-center text-gray-400 py-12">
-          <Film className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">{t("noVideos")}</p>
-          <p className="text-sm">{t("noVideosSub")}</p>
-        </div>
+        {/* ジョブ履歴 */}
+        {jobs.length > 0 && (
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">処理履歴</h2>
+            <div className="space-y-2">
+              {jobs.map((job) => (
+                <Link
+                  key={job.job_id}
+                  href={`/${locale}/results/${job.job_id}`}
+                  className="flex items-center justify-between gap-4 bg-white rounded-2xl border border-gray-100 hover:border-purple-200 hover:shadow-md transition-all p-4 group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center flex-shrink-0">
+                      <Film className="w-5 h-5 text-purple-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate text-sm">
+                        {job.video_filename || job.video_id}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="flex items-center gap-1 text-xs text-gray-400">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(job.created_at)}
+                        </span>
+                        {job.cut_count !== null && (
+                          <span className="text-xs text-gray-400">カット {job.cut_count} 箇所</span>
+                        )}
+                        {job.has_mp4 && (
+                          <span className="text-xs text-green-600 font-medium">MP4あり</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <StatusBadge status={job.status} />
+                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && jobs.length === 0 && (
+          <div className="text-center text-gray-400 py-8">
+            <Film className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="font-medium">{t("noVideos")}</p>
+            <p className="text-sm">{t("noVideosSub")}</p>
+          </div>
+        )}
       </main>
 
       <Footer />

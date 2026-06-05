@@ -10,6 +10,16 @@ from xml.dom import minidom
 from xml.etree import ElementTree as ET
 
 
+def _is_ntsc(fps: float) -> bool:
+    """29.97 / 23.976 / 59.94 fps は NTSC。"""
+    return abs(fps - 29.97) < 0.05 or abs(fps - 23.976) < 0.05 or abs(fps - 59.94) < 0.05
+
+
+def _fps_int(fps: float) -> int:
+    """NTSC は 29.97 → 30, 23.976 → 24 と timebase を整数化する。"""
+    return int(round(fps))
+
+
 def _frames(seconds: float, fps: float) -> int:
     return max(0, int(round(seconds * fps)))
 
@@ -27,10 +37,10 @@ def _kept_segments(cuts: list[dict], total: float) -> list[tuple[float, float]]:
     return [(s, e) for s, e in segments if e - s > 0.05]
 
 
-def _rate_elem(parent: ET.Element, fps_int: int) -> None:
+def _rate_elem(parent: ET.Element, fps: float) -> None:
     r = ET.SubElement(parent, "rate")
-    ET.SubElement(r, "timebase").text = str(fps_int)
-    ET.SubElement(r, "ntsc").text = "FALSE"
+    ET.SubElement(r, "timebase").text = str(_fps_int(fps))
+    ET.SubElement(r, "ntsc").text = "TRUE" if _is_ntsc(fps) else "FALSE"
 
 
 def build_premiere_xml(
@@ -41,7 +51,6 @@ def build_premiere_xml(
     width: int = 1920,
     height: int = 1080,
 ) -> str:
-    fps_int = int(round(fps))
     kept = _kept_segments(cuts, total_duration)
     total_frames = _frames(total_duration, fps)
     timeline_total = sum(_frames(e - s, fps) for s, e in kept)
@@ -52,7 +61,7 @@ def build_premiere_xml(
     seq = ET.SubElement(xmeml, "sequence", id=f"seq-{uuid.uuid4().hex[:8]}")
     ET.SubElement(seq, "uuid").text = str(uuid.uuid4())
     ET.SubElement(seq, "duration").text = str(timeline_total)
-    _rate_elem(seq, fps_int)
+    _rate_elem(seq, fps)
     ET.SubElement(seq, "name").text = f"EditClone - {video_path.stem}"
 
     media = ET.SubElement(seq, "media")
@@ -61,7 +70,7 @@ def build_premiere_xml(
     video_el = ET.SubElement(media, "video")
     fmt = ET.SubElement(video_el, "format")
     sc = ET.SubElement(fmt, "samplecharacteristics")
-    _rate_elem(sc, fps_int)
+    _rate_elem(sc, fps)
     ET.SubElement(sc, "width").text = str(width)
     ET.SubElement(sc, "height").text = str(height)
 
@@ -85,11 +94,11 @@ def build_premiere_xml(
         out_f = _frames(seg_end, fps)
         clip_id = f"clipitem-{i + 1}"
 
-        def make_clip(track: ET.Element, clip_id: str) -> ET.Element:
-            ci = ET.SubElement(track, "clipitem", id=clip_id)
+        def make_clip(track: ET.Element, cid: str) -> ET.Element:
+            ci = ET.SubElement(track, "clipitem", id=cid)
             ET.SubElement(ci, "name").text = f"{video_path.stem}_{i + 1}"
             ET.SubElement(ci, "duration").text = str(seg_frames)
-            _rate_elem(ci, fps_int)
+            _rate_elem(ci, fps)
             ET.SubElement(ci, "start").text = str(timeline_pos)
             ET.SubElement(ci, "end").text = str(timeline_pos + seg_frames)
             ET.SubElement(ci, "in").text = str(in_f)
@@ -99,23 +108,22 @@ def build_premiere_xml(
         # Video clip
         vci = make_clip(v_track, f"v{clip_id}")
         if first_file:
-            # Full file element on first reference
             f_el = ET.SubElement(vci, "file", id=file_id)
             ET.SubElement(f_el, "name").text = video_path.name
             ET.SubElement(f_el, "pathurl").text = (
                 f"file://localhost/EDITCLONE_MEDIA/{video_path.name}"
             )
-            _rate_elem(f_el, fps_int)
+            _rate_elem(f_el, fps)
             ET.SubElement(f_el, "duration").text = str(total_frames)
             tc = ET.SubElement(f_el, "timecode")
-            _rate_elem(tc, fps_int)
+            _rate_elem(tc, fps)
             ET.SubElement(tc, "string").text = "00:00:00:00"
             ET.SubElement(tc, "frame").text = "0"
             ET.SubElement(tc, "displayformat").text = "NDF"
             fm = ET.SubElement(f_el, "media")
             fv = ET.SubElement(fm, "video")
             fvsc = ET.SubElement(fv, "samplecharacteristics")
-            _rate_elem(fvsc, fps_int)
+            _rate_elem(fvsc, fps)
             ET.SubElement(fvsc, "width").text = str(width)
             ET.SubElement(fvsc, "height").text = str(height)
             fa = ET.SubElement(fm, "audio")

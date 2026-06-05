@@ -42,8 +42,8 @@
         "description": "Export silence-cut MP4 directly. Ready for immediate upload to social media."
       },
       "async": {
-        "title": "Style Learning Loop",
-        "description": "Learns from your accept/reject feedback to automatically improve editing accuracy over time."
+        "title": "AI Editing Instructions",
+        "description": "Give Claude natural language instructions like 'cut the intro greeting' or 'remove all filler words'."
       }
     }
   },

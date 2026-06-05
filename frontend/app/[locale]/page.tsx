@@ -7,6 +7,20 @@ import {
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
+// 固定値でハイドレーションエラーを防ぐ
+const BUBBLES = [
+  { w: 284, h: 192, l: 78, t: 12 }, { w: 156, h: 348, l: 23, t: 67 },
+  { w: 320, h: 210, l: 45, t: 85 }, { w: 98, h: 260, l: 62, t: 32 },
+  { w: 240, h: 140, l: 9, t: 50 },  { w: 180, h: 320, l: 88, t: 71 },
+  { w: 350, h: 180, l: 55, t: 18 }, { w: 120, h: 290, l: 34, t: 92 },
+  { w: 270, h: 230, l: 72, t: 55 }, { w: 200, h: 160, l: 15, t: 28 },
+  { w: 310, h: 270, l: 41, t: 76 }, { w: 140, h: 200, l: 93, t: 42 },
+  { w: 220, h: 310, l: 67, t: 8 },  { w: 170, h: 130, l: 28, t: 61 },
+  { w: 260, h: 250, l: 81, t: 90 }, { w: 190, h: 180, l: 52, t: 38 },
+  { w: 130, h: 340, l: 7, t: 80 },  { w: 300, h: 160, l: 38, t: 22 },
+  { w: 160, h: 220, l: 95, t: 58 }, { w: 230, h: 290, l: 18, t: 45 },
+];
+
 function Hero() {
   const t = useTranslations("hero");
   const locale = useLocale();
@@ -14,15 +28,15 @@ function Hero() {
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-purple-950 via-indigo-900 to-blue-900">
       <div className="absolute inset-0 animate-gradient-x bg-gradient-to-r from-purple-900 via-violet-800 to-blue-900 opacity-60" />
       <div className="absolute inset-0">
-        {[...Array(20)].map((_, i) => (
+        {BUBBLES.map((b, i) => (
           <div
             key={i}
             className="absolute rounded-full bg-white/5"
             style={{
-              width: `${Math.random() * 300 + 50}px`,
-              height: `${Math.random() * 300 + 50}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
+              width: `${b.w}px`,
+              height: `${b.h}px`,
+              left: `${b.l}%`,
+              top: `${b.t}%`,
               transform: "translate(-50%,-50%)",
             }}
           />
@@ -56,8 +70,8 @@ function Hero() {
           <p className="text-white/50 text-sm">{t("ctaSub")}</p>
         </div>
 
-        <div className="mt-20 flex items-center justify-center gap-12 text-white/60 text-sm flex-wrap">
-          {["FCPXML", "MP4出力", "SRT字幕", "YouTubeチャプター", "FCP / Premiere / DaVinci"].map((label) => (
+        <div className="mt-20 flex items-center justify-center gap-8 text-white/60 text-sm flex-wrap">
+          {["AI編集指示", "FCPXML", "MP4出力", "SRT字幕", "FCP / Premiere / DaVinci"].map((label) => (
             <div key={label} className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
               {label}

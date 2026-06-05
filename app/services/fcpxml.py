@@ -7,8 +7,36 @@ from app.services.cut_suggestion import suggest_cuts
 from app.services.video_info import extract_video_info
 
 
+def _frame_duration(fps: float) -> str:
+    """FPS から FCPXML frameDuration 有理数文字列を返す（NTSC 対応）。"""
+    if abs(fps - 23.976) < 0.05:
+        return "1001/24000s"
+    if abs(fps - 29.97) < 0.05:
+        return "1001/30000s"
+    if abs(fps - 47.952) < 0.05:
+        return "1001/48000s"
+    if abs(fps - 59.94) < 0.05:
+        return "1001/60000s"
+    fps_int = int(round(fps))
+    return f"1/{fps_int}s"
+
+
+def _format_name(fps: float, height: int) -> str:
+    """FCP フォーマット名を返す（NTSC は 4 桁 fps 表記）。"""
+    if abs(fps - 23.976) < 0.05:
+        return f"FFVideoFormat{height}p2398"
+    if abs(fps - 29.97) < 0.05:
+        return f"FFVideoFormat{height}p2997"
+    if abs(fps - 47.952) < 0.05:
+        return f"FFVideoFormat{height}p4795"
+    if abs(fps - 59.94) < 0.05:
+        return f"FFVideoFormat{height}p5994"
+    fps_int = int(round(fps))
+    return f"FFVideoFormat{height}p{fps_int}"
+
+
 def _t(seconds: float) -> str:
-    """Float秒 → FCPXML有理数時刻文字列 (ms精度)"""
+    """Float 秒 → FCPXML 有理数時刻文字列 (ms 精度)"""
     ms = round(seconds * 1000)
     return f"{ms}/1000s"
 
@@ -34,13 +62,15 @@ def build_fcpxml(
     noise_db: float = -30.0,
     min_duration: float = 0.5,
     cuts: list[dict] | None = None,
+    video_info: dict | None = None,
 ) -> str:
-    info = extract_video_info(video_path)
-    total_sec = info["duration_seconds"] or 0.0
-    width = info["width"] or 1920
-    height = info["height"] or 1080
-    fps = info["fps"] or 30.0
-    fps_int = int(round(fps))
+    if video_info is None:
+        video_info = extract_video_info(video_path)
+
+    total_sec = float(video_info.get("duration_seconds") or 0.0)
+    width = int(video_info.get("width") or 1920)
+    height = int(video_info.get("height") or 1080)
+    fps = float(video_info.get("fps") or 30.0)
 
     if cuts is None:
         cuts = suggest_cuts(video_path, noise_db=noise_db, min_duration=min_duration)
@@ -57,8 +87,8 @@ def build_fcpxml(
     resources = ET.SubElement(root, "resources")
     ET.SubElement(resources, "format", {
         "id": fmt_id,
-        "name": f"FFVideoFormat{height}p{fps_int}",
-        "frameDuration": f"1/{fps_int}s",
+        "name": _format_name(fps, height),
+        "frameDuration": _frame_duration(fps),
         "width": str(width),
         "height": str(height),
     })

@@ -88,14 +88,16 @@ def add_subtitles_to_mp4(
             srt_escaped = srt_escaped[0] + "\\:" + srt_escaped[2:]
 
         style = (
-            "FontSize=26,"
+            "Fontname=Noto Sans CJK JP,"
+            "Fontsize=28,"
             "PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,"
             "BorderStyle=1,"
             "Outline=3,"
-            "Shadow=0,"
-            "MarginV=50,"
-            "Bold=1"
+            "Shadow=1,"
+            "MarginV=55,"
+            "Bold=1,"
+            "Alignment=2"
         )
 
         cmd = [

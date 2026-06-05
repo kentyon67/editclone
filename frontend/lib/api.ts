@@ -87,6 +87,13 @@ export function getMp4Url(jobId: string): string {
   return `${API_URL}/jobs/${jobId}/mp4`;
 }
 
+export async function getUserJobs(): Promise<{ jobs: UserJob[] }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/jobs`, { headers });
+  if (!res.ok) return handleError(res, "Jobs fetch failed");
+  return res.json();
+}
+
 export async function getUserUsage(): Promise<UsageResponse> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/usage/me`, { headers });
@@ -164,4 +171,15 @@ export interface Chapter {
   start_seconds: number;
   start_formatted: string;
   title: string;
+}
+
+export interface UserJob {
+  job_id: string;
+  video_filename: string;
+  video_id: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  created_at: string;
+  completed_at: string | null;
+  has_mp4: boolean;
+  cut_count: number | null;
 }

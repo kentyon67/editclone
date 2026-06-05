@@ -10,22 +10,25 @@ import re
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
 
 _SYSTEM_PROMPT = """\
 あなたはプロの動画編集アシスタントです。
-ユーザーが与えた「編集指示」と、Whisper で生成したタイムスタンプ付きの書き起こしセグメントを元に、
+ユーザーの「編集指示」と Whisper で生成したタイムスタンプ付きの書き起こしセグメントをもとに、
 動画からカットすべき区間を特定してください。
 
-回答は JSON 配列のみ（他のテキストを含めない）で返してください。
-形式: [{"cut_start": 0.0, "cut_end": 4.5, "reason": "理由"}]
-カットが不要な場合は空配列 [] を返してください。
+【回答形式】
+- JSON 配列のみ（他のテキスト一切不要）
+- カット不要なら []
+- 形式: [{"cut_start": 0.0, "cut_end": 4.5, "reason": "理由"}]
 
-ルール:
-- タイムスタンプは元動画の秒数（float）で指定する
-- 隣接するカットはまとめてよい
-- reason は日本語で簡潔に（〜10字）
-- 発話の途中でカットしない（セグメント境界を尊重する）
+【ルール】
+1. cut_start はカット対象の最初のセグメントの start、cut_end は最後のセグメントの end に正確に合わせる
+   → 発話の途中でカットしない。必ずセグメント境界（start/end）で切る
+2. 連続または隣接するカット（0.1 秒以内）は 1 つにまとめる
+3. reason は 10 字以内の日本語で（例: "冒頭挨拶", "言い淀み", "告知不要"）
+4. タイムスタンプは元動画の秒数（float）
+5. 「冒頭」= 動画開始直後、「末尾・アウトロ」= 動画終了直前 として扱う
 """
 
 
@@ -33,6 +36,7 @@ def analyze_transcript_for_cuts(
     segments: list[dict],
     prompt: str,
     transcript: str = "",
+    total_duration: float = 0.0,
 ) -> list[dict]:
     """
     Claude API でトランスクリプトを分析し、ユーザー指示に基づくカット候補を返す。
@@ -56,13 +60,15 @@ def analyze_transcript_for_cuts(
     segments_text = "\n".join(
         f"[{s['start']:.2f}s - {s['end']:.2f}s] {s['text']}" for s in segments
     )
-    user_message = f"編集指示: {prompt}\n\nセグメント一覧:\n{segments_text}"
+
+    duration_info = f"動画の総尺: {total_duration:.1f}秒\n\n" if total_duration > 0 else ""
+    user_message = f"{duration_info}編集指示: {prompt}\n\nセグメント一覧:\n{segments_text}"
 
     try:
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
             model=_MODEL,
-            max_tokens=1024,
+            max_tokens=2048,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
         )
@@ -78,7 +84,7 @@ def analyze_transcript_for_cuts(
         for c in cuts:
             start = float(c.get("cut_start", 0))
             end = float(c.get("cut_end", 0))
-            if end > start:
+            if end > start + 0.05:
                 result.append({
                     "cut_start": round(start, 3),
                     "cut_end": round(end, 3),
