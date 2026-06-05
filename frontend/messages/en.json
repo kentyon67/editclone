@@ -206,7 +206,13 @@
     "settings": "Cut Settings (defaults work great)",
     "noiseDb": "Cut Sensitivity",
     "noiseDbHint": "Sensitive (cut small pauses) ← → Lenient (cut long pauses only)",
+    "noiseDbSensitive": "Sensitive (cut small pauses)",
+    "noiseDbLenient": "Lenient (long pauses only)",
     "minDuration": "Min silence length to cut (seconds)",
+    "minDurationValue": "{duration}s min",
+    "minDurationFrom": "0.1s",
+    "minDurationTo": "3s",
+    "upgradeLink": "Upgrade plan",
     "submit": "Start Processing"
   },
   "results": {
@@ -264,18 +270,30 @@
     "delete": "Delete",
     "deleteConfirm": "Delete this profile?",
     "jobCount": "{count} videos processed",
+    "use": "Use",
+    "aiPromptBadge": "Has AI instructions",
     "form": {
       "name": "Profile name",
       "namePlaceholder": "e.g. YouTube daily vlog",
       "description": "Notes (optional)",
       "descriptionPlaceholder": "Describe this style...",
       "noiseDb": "Silence cut sensitivity",
+      "sensitive": "Sensitive",
+      "lenient": "Lenient",
       "minSilence": "Minimum silence to cut",
       "defaultPrompt": "Default AI instructions",
       "defaultPromptPlaceholder": "e.g. Cut the intro greeting, remove all filler words",
       "save": "Save",
       "cancel": "Cancel",
       "create": "Create"
+    },
+    "referenceVideos": {
+      "title": "Reference Videos",
+      "add": "Add",
+      "urlPlaceholder": "YouTube or Vimeo URL",
+      "adding": "Adding...",
+      "empty": "No reference videos yet",
+      "unsupportedError": "Only YouTube and Vimeo URLs are supported."
     },
     "feedback": {
       "title": "How was this edit?",

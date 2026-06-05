@@ -4,13 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
-  Loader2, X, Wand2,
+  Loader2, X, Wand2, Film, ChevronDown,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import {
   listStyleProfiles, createStyleProfile, updateStyleProfile,
-  deleteStyleProfile, activateStyleProfile, type StyleProfile,
+  deleteStyleProfile, activateStyleProfile,
+  listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
+  ApiError,
+  type StyleProfile, type ReferenceVideo,
 } from "@/lib/api";
 
 type FormData = {
@@ -89,9 +92,9 @@ function ProfileForm({
           className="w-full accent-purple-600"
         />
         <div className="flex justify-between text-xs text-gray-400 mt-1">
-          <span>敏感</span>
+          <span>{t("sensitive")}</span>
           <span className="font-medium text-purple-700">{form.noise_db} dB</span>
-          <span>鈍感</span>
+          <span>{t("lenient")}</span>
         </div>
       </div>
 
@@ -136,6 +139,130 @@ function ProfileForm({
         </button>
       </div>
     </form>
+  );
+}
+
+function ReferenceVideoSection({ profileId }: { profileId: string }) {
+  const t = useTranslations("styles.referenceVideos");
+  const [open, setOpen] = useState(false);
+  const [videos, setVideos] = useState<ReferenceVideo[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [url, setUrl] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setLoading(true);
+    const { videos: v } = await listReferenceVideos(profileId);
+    setVideos(v);
+    setLoaded(true);
+    setLoading(false);
+  }
+
+  async function toggle() {
+    if (!open && !loaded) await load();
+    setOpen((o) => !o);
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url.trim() || adding) return;
+    setAdding(true);
+    setError("");
+    try {
+      const v = await addReferenceVideo(profileId, url.trim());
+      setVideos((prev) => [...prev, v]);
+      setUrl("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("unsupportedError"));
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function handleDelete(videoId: string) {
+    await deleteReferenceVideo(profileId, videoId);
+    setVideos((prev) => prev.filter((v) => v.id !== videoId));
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-50">
+      <button
+        type="button"
+        onClick={toggle}
+        className="w-full flex items-center gap-1.5 text-xs text-gray-400 hover:text-purple-600 transition-colors"
+      >
+        <Film className="w-3 h-3" />
+        {t("title")}
+        {loaded && videos.length > 0 && (
+          <span className="bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-semibold">
+            {videos.length}
+          </span>
+        )}
+        <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-2 space-y-2">
+          {loading ? (
+            <div className="flex justify-center py-3">
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+            </div>
+          ) : videos.length === 0 ? (
+            <p className="text-xs text-gray-300 text-center py-2">{t("empty")}</p>
+          ) : (
+            videos.map((v) => (
+              <div key={v.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-2">
+                {v.oembed_thumbnail_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={v.oembed_thumbnail_url}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-14 h-9 object-cover rounded-lg flex-shrink-0 bg-gray-200"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-700 truncate">
+                    {v.oembed_title || v.url}
+                  </p>
+                  {v.oembed_provider && (
+                    <p className="text-xs text-gray-400">{v.oembed_provider}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => handleDelete(v.id)}
+                  className="p-1 text-gray-300 hover:text-red-400 flex-shrink-0 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))
+          )}
+
+          <form onSubmit={handleAdd} className="flex gap-2 pt-1">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={t("urlPlaceholder")}
+              type="url"
+              className="flex-1 text-xs px-3 py-1.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-400"
+            />
+            <button
+              type="submit"
+              disabled={adding || !url.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+              {t("add")}
+            </button>
+          </form>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -193,7 +320,7 @@ function ProfileCard({
         <span className="bg-gray-50 px-2 py-1 rounded-lg">{profile.min_silence_seconds}s</span>
         {profile.default_prompt && (
           <span className="bg-purple-50 text-purple-600 px-2 py-1 rounded-lg flex items-center gap-1">
-            <Wand2 className="w-3 h-3" /> AI指示あり
+            <Wand2 className="w-3 h-3" /> {t("aiPromptBadge")}
           </span>
         )}
         {profile.job_count > 0 && (
@@ -216,9 +343,11 @@ function ProfileCard({
           href={`/${locale}/upload`}
           className="flex items-center justify-center gap-1 px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 text-sm"
         >
-          使う <ChevronRight className="w-3 h-3" />
+          {t("use")} <ChevronRight className="w-3 h-3" />
         </Link>
       </div>
+
+      <ReferenceVideoSection profileId={profile.id} />
     </div>
   );
 }
@@ -282,7 +411,6 @@ export default function StylesPage() {
           )}
         </div>
 
-        {/* 新規作成フォーム */}
         {showForm && (
           <div className="bg-white rounded-2xl border border-purple-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
@@ -295,7 +423,6 @@ export default function StylesPage() {
           </div>
         )}
 
-        {/* 編集フォーム */}
         {editingProfile && (
           <div className="bg-white rounded-2xl border border-purple-200 p-6 mb-6">
             <div className="flex items-center justify-between mb-4">
@@ -318,7 +445,6 @@ export default function StylesPage() {
           </div>
         )}
 
-        {/* プロファイル一覧 */}
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-purple-400" />

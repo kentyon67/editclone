@@ -153,3 +153,83 @@ def record_feedback(user_id: str, job_id: str, action: str, style_profile_id: Op
     except Exception as e:
         logger.warning("record_feedback failed: %s", e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Reference Videos (oEmbed only — no video download)
+# ---------------------------------------------------------------------------
+
+_OEMBED_ENDPOINTS: dict[str, str] = {
+    "youtube.com": "https://www.youtube.com/oembed",
+    "youtu.be": "https://www.youtube.com/oembed",
+    "vimeo.com": "https://vimeo.com/api/oembed.json",
+}
+
+
+def _fetch_oembed(url: str) -> dict:
+    """oEmbed メタ情報のみ取得。動画ダウンロードは行わない。"""
+    import json
+    import urllib.parse
+    import urllib.request
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL は http / https のみ対応しています")
+
+    host = parsed.netloc.replace("www.", "")
+    endpoint = next(
+        (ep for domain, ep in _OEMBED_ENDPOINTS.items() if domain in host),
+        None,
+    )
+    if endpoint is None:
+        raise ValueError("未対応のURLです。YouTube / Vimeo のURLのみ対応しています。")
+
+    api_url = f"{endpoint}?url={urllib.parse.quote(url, safe='')}&format=json"
+    req = urllib.request.Request(api_url, headers={"User-Agent": "EditClone/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read())
+
+
+def list_reference_videos(profile_id: str, user_id: str) -> list[dict]:
+    try:
+        resp = (
+            _client().table("reference_videos")
+            .select("*")
+            .eq("style_profile_id", profile_id)
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        logger.warning("list_reference_videos failed: %s", e)
+        return []
+
+
+def add_reference_video(profile_id: str, user_id: str, url: str) -> dict:
+    if not get_profile(profile_id, user_id):
+        raise PermissionError("プロファイルが見つかりません")
+
+    oembed = _fetch_oembed(url)  # raises ValueError / RuntimeError on failure
+
+    resp = _client().table("reference_videos").insert({
+        "user_id": user_id,
+        "style_profile_id": profile_id,
+        "url": url,
+        "oembed_title": oembed.get("title"),
+        "oembed_thumbnail_url": oembed.get("thumbnail_url"),
+        "oembed_provider": oembed.get("provider_name"),
+    }).execute()
+    if not resp.data:
+        raise RuntimeError("参考動画の保存に失敗しました")
+    return resp.data[0]
+
+
+def delete_reference_video(video_id: str, profile_id: str, user_id: str) -> bool:
+    try:
+        _client().table("reference_videos").delete().eq("id", video_id).eq("style_profile_id", profile_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.warning("delete_reference_video failed: %s", e)
+        return False

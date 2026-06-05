@@ -4,7 +4,6 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles } from "lucide-react";
-import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { uploadVideo, startProcessing, getActiveStyleProfile, ApiError, type StyleProfile } from "@/lib/api";
@@ -204,14 +203,14 @@ export default function UploadPage() {
                   className="w-full accent-purple-600"
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>敏感（小さな無音もカット）</span>
-                  <span>鈍感（大きな無音のみ）</span>
+                  <span>{t("noiseDbSensitive")}</span>
+                  <span>{t("noiseDbLenient")}</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t("minDuration")}: <span className="text-purple-600 font-bold">{minDuration}秒以上</span>
+                  {t("minDuration")}: <span className="text-purple-600 font-bold">{t("minDurationValue", { duration: minDuration })}</span>
                 </label>
                 <input
                   type="range"
@@ -223,8 +222,8 @@ export default function UploadPage() {
                   className="w-full accent-purple-600"
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>0.1秒〜</span>
-                  <span>〜3秒</span>
+                  <span>{t("minDurationFrom")}</span>
+                  <span>{t("minDurationTo")}</span>
                 </div>
               </div>
             </div>
@@ -245,7 +244,7 @@ export default function UploadPage() {
                       href={`/${locale}/pricing`}
                       className="inline-flex items-center gap-1 mt-2 font-semibold text-purple-700 hover:text-purple-900"
                     >
-                      プランをアップグレード <ArrowUpRight className="w-3 h-3" />
+                      {t("upgradeLink")} <ArrowUpRight className="w-3 h-3" />
                     </Link>
                   )}
                 </div>

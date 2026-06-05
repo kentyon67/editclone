@@ -206,7 +206,13 @@
     "settings": "カット設定（通常はそのままでOK）",
     "noiseDb": "カット感度",
     "noiseDbHint": "敏感（小さな無音もカット）← → 鈍感（大きな無音のみ）",
+    "noiseDbSensitive": "敏感（小さな無音もカット）",
+    "noiseDbLenient": "鈍感（大きな無音のみ）",
     "minDuration": "何秒以上の無音をカットするか",
+    "minDurationValue": "{duration}秒以上",
+    "minDurationFrom": "0.1秒〜",
+    "minDurationTo": "〜3秒",
+    "upgradeLink": "プランをアップグレード",
     "submit": "処理を開始"
   },
   "results": {
@@ -264,18 +270,30 @@
     "delete": "削除",
     "deleteConfirm": "このプロファイルを削除しますか？",
     "jobCount": "{count}本処理済み",
+    "use": "使う",
+    "aiPromptBadge": "AI指示あり",
     "form": {
       "name": "プロファイル名",
       "namePlaceholder": "例: YouTube日常vlog",
       "description": "メモ（任意）",
       "descriptionPlaceholder": "このスタイルの特徴など",
       "noiseDb": "無音カット感度",
+      "sensitive": "敏感",
+      "lenient": "鈍感",
       "minSilence": "カットする最低無音時間",
       "defaultPrompt": "デフォルトAI指示",
       "defaultPromptPlaceholder": "例: 冒頭の挨拶をカット、言い淀みを全部削除",
       "save": "保存",
       "cancel": "キャンセル",
       "create": "作成"
+    },
+    "referenceVideos": {
+      "title": "参考動画",
+      "add": "追加",
+      "urlPlaceholder": "YouTube / Vimeo の URL",
+      "adding": "追加中...",
+      "empty": "参考動画なし",
+      "unsupportedError": "YouTube / Vimeo のURLのみ対応しています。"
     },
     "feedback": {
       "title": "この編集結果はどうでしたか？",

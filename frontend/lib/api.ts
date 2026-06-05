@@ -269,3 +269,41 @@ export interface UserJob {
   has_mp4: boolean;
   cut_count: number | null;
 }
+
+export interface ReferenceVideo {
+  id: string;
+  user_id: string;
+  style_profile_id: string;
+  url: string;
+  oembed_title: string | null;
+  oembed_thumbnail_url: string | null;
+  oembed_provider: string | null;
+  created_at: string;
+}
+
+export async function listReferenceVideos(profileId: string): Promise<{ videos: ReferenceVideo[] }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/reference-videos`, { headers });
+  if (!res.ok) return { videos: [] };
+  return res.json();
+}
+
+export async function addReferenceVideo(profileId: string, url: string): Promise<ReferenceVideo> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/reference-videos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) return handleError(res, "Add reference video failed");
+  return res.json();
+}
+
+export async function deleteReferenceVideo(profileId: string, videoId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/reference-videos/${videoId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "Delete reference video failed");
+}
