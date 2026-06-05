@@ -122,3 +122,79 @@ def get_next_revision_number(project_id: str) -> int:
     except Exception as e:
         logger.warning("get_next_revision_number failed: %s", e)
         return 1
+
+
+# ---------------------------------------------------------------------------
+# Re-export (Phase 3)
+# ---------------------------------------------------------------------------
+
+def re_export_project(project_id: str, user_id: str, prompt: Optional[str] = None) -> str:
+    """元ジョブ設定で再処理を実行する。新しいジョブIDを返す。"""
+    project = get_project(project_id, user_id)
+    if project is None:
+        raise PermissionError("プロジェクトが見つかりません")
+
+    from app.services.jobs import get_job, create_job
+    source_job = get_job(project["source_job_id"])
+    if source_job is None:
+        raise ValueError("元ジョブが見つかりません（元動画が期限切れの可能性があります）")
+
+    new_prompt = prompt if prompt is not None else (source_job.prompt or "")
+    new_job = create_job(
+        video_id=source_job.video_id,
+        video_path=source_job.video_path,
+        noise_db=source_job.noise_db,
+        min_duration=source_job.min_duration,
+        user_id=user_id,
+        prompt=new_prompt,
+    )
+    return new_job.id
+
+
+# ---------------------------------------------------------------------------
+# Plugin Revision Receive + Conflict Detection (Phase 3)
+# ---------------------------------------------------------------------------
+
+def receive_plugin_revision(
+    project_id: str,
+    user_id: str,
+    notes: str = "",
+    metadata: Optional[dict] = None,
+) -> dict:
+    """Plugin からのリビジョンを受信し、競合を検出する。"""
+    project = get_project(project_id, user_id)
+    if project is None:
+        raise PermissionError("プロジェクトが見つかりません")
+
+    existing = project.get("project_revisions") or []
+    next_num = get_next_revision_number(project_id)
+
+    # 直近の plugin リビジョンより後に web リビジョンがあれば競合
+    last_plugin = next(
+        (r for r in sorted(existing, key=lambda x: x.get("revision_number", 0), reverse=True)
+         if r.get("source") == "plugin"),
+        None,
+    )
+    if last_plugin:
+        web_after = [
+            r for r in existing
+            if r.get("source") == "web"
+            and r.get("revision_number", 0) > last_plugin.get("revision_number", 0)
+        ]
+        is_conflict = len(web_after) > 0
+    else:
+        is_conflict = False
+
+    revision = add_revision(
+        project_id=project_id,
+        user_id=user_id,
+        revision_number=next_num,
+        source="plugin",
+        notes=notes,
+        metadata=metadata or {},
+    )
+
+    new_status = "conflict" if is_conflict else "synced"
+    update_sync_status(project_id, user_id, new_status)
+
+    return {"revision": revision, "sync_status": new_status}

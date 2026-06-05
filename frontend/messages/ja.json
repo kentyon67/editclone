@@ -194,7 +194,8 @@
     "projectCount": "{count}件",
     "syncLocal": "Web",
     "syncSynced": "Plugin連携済み",
-    "syncConflict": "競合あり"
+    "syncConflict": "競合あり",
+    "projectLink": "プロジェクト"
   },
   "upload": {
     "title": "動画をアップロード",
@@ -319,6 +320,37 @@
       "reject": "やり直したい",
       "done": "フィードバックを送信しました"
     }
+  },
+  "projects": {
+    "title": "プロジェクト詳細",
+    "back": "ダッシュボードへ",
+    "notFound": "プロジェクトが見つかりません",
+    "originalJob": "元の処理ジョブ",
+    "viewResults": "結果を見る",
+    "styleProfile": "スタイルプロファイル",
+    "noProfile": "プロファイルなし",
+    "revisions": "リビジョン履歴",
+    "noRevisions": "リビジョンなし",
+    "reExport": "再エクスポート",
+    "reExporting": "処理中...",
+    "reExportTitle": "再エクスポート",
+    "reExportDesc": "同じ動画を再処理します。AIへの指示を変更して試すこともできます。",
+    "reExportPromptLabel": "AIへの編集指示（変更する場合のみ）",
+    "reExportPromptPlaceholder": "例: 冒頭の挨拶をカット、言い淀みを全部削除",
+    "reExportCancel": "キャンセル",
+    "reExportStart": "処理を開始",
+    "sourceWeb": "Web",
+    "sourcePlugin": "Plugin",
+    "syncLocal": "ローカル",
+    "syncSynced": "Plugin連携済み",
+    "syncConflict": "競合あり",
+    "syncConflictHelp": "Plugin と Web で同時に変更が行われました。最新のリビジョンを確認してください。",
+    "cutCount": "カット {count} 件",
+    "hasPrompt": "AI指示あり",
+    "revision": "Rev.{number}",
+    "createdAt": "作成日",
+    "viewJob": "このジョブの結果を見る",
+    "projectLink": "プロジェクト"
   },
   "processing": {
     "title": "編集中...",

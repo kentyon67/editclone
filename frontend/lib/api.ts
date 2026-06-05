@@ -358,3 +358,32 @@ export async function getProject(projectId: string): Promise<Project | null> {
   if (!res.ok) return null;
   return res.json();
 }
+
+export async function reExportProject(
+  projectId: string,
+  prompt?: string,
+): Promise<{ job_id: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/projects/${projectId}/re-export`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ prompt: prompt ?? null }),
+  });
+  if (!res.ok) return handleError(res, "Re-export failed");
+  return res.json();
+}
+
+export async function postPluginRevision(
+  projectId: string,
+  notes: string = "",
+  metadata: Record<string, unknown> = {},
+): Promise<{ revision: ProjectRevision; sync_status: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/projects/${projectId}/revisions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ notes, metadata }),
+  });
+  if (!res.ok) return handleError(res, "Plugin revision post failed");
+  return res.json();
+}

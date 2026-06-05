@@ -1,3 +1,6 @@
+import threading
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +12,15 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 class SyncStatusUpdate(BaseModel):
     sync_status: str
+
+
+class ReExportRequest(BaseModel):
+    prompt: Optional[str] = None
+
+
+class PluginRevisionCreate(BaseModel):
+    notes: str = ""
+    metadata: Optional[dict] = None
 
 
 @router.get("")
@@ -36,3 +48,38 @@ def update_sync_status(
     if not ok:
         raise HTTPException(status_code=404, detail="プロジェクトが見つかりません")
     return {"updated": True}
+
+
+@router.post("/{project_id}/re-export")
+def re_export_project(
+    project_id: str,
+    body: ReExportRequest,
+    user: dict = Depends(require_user),
+):
+    """元ジョブと同じ動画・設定で再処理を実行する。新しいジョブIDを返す。"""
+    try:
+        job_id = svc.re_export_project(project_id, user["id"], body.prompt)
+    except PermissionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    from app.services.jobs import run_job
+    threading.Thread(target=run_job, args=(job_id,), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@router.post("/{project_id}/revisions")
+def receive_plugin_revision(
+    project_id: str,
+    body: PluginRevisionCreate,
+    user: dict = Depends(require_user),
+):
+    """Plugin からのリビジョンを受信し、競合を検出して sync_status を更新する。"""
+    try:
+        result = svc.receive_plugin_revision(
+            project_id, user["id"], body.notes, body.metadata
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return result

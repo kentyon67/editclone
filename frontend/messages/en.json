@@ -194,7 +194,8 @@
     "projectCount": "{count}",
     "syncLocal": "Web",
     "syncSynced": "Plugin Synced",
-    "syncConflict": "Conflict"
+    "syncConflict": "Conflict",
+    "projectLink": "Project"
   },
   "upload": {
     "title": "Upload Video",
@@ -319,6 +320,37 @@
       "reject": "Needs work",
       "done": "Feedback sent"
     }
+  },
+  "projects": {
+    "title": "Project Detail",
+    "back": "Back to Dashboard",
+    "notFound": "Project not found",
+    "originalJob": "Original Job",
+    "viewResults": "View Results",
+    "styleProfile": "Style Profile",
+    "noProfile": "No profile",
+    "revisions": "Revision History",
+    "noRevisions": "No revisions yet",
+    "reExport": "Re-export",
+    "reExporting": "Processing...",
+    "reExportTitle": "Re-export",
+    "reExportDesc": "Re-process the same video with the same settings. You can also change the AI instructions.",
+    "reExportPromptLabel": "AI editing instructions (optional override)",
+    "reExportPromptPlaceholder": "e.g. Cut the intro, remove all filler words",
+    "reExportCancel": "Cancel",
+    "reExportStart": "Start Processing",
+    "sourceWeb": "Web",
+    "sourcePlugin": "Plugin",
+    "syncLocal": "Local",
+    "syncSynced": "Plugin Synced",
+    "syncConflict": "Conflict",
+    "syncConflictHelp": "Both Plugin and Web created revisions at the same time. Review the latest revisions.",
+    "cutCount": "{count} cuts",
+    "hasPrompt": "Has AI instructions",
+    "revision": "Rev.{number}",
+    "createdAt": "Created",
+    "viewJob": "View this job's results",
+    "projectLink": "Project"
   },
   "processing": {
     "title": "Editing...",
