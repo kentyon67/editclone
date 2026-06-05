@@ -154,6 +154,22 @@
       "terms": "I agree to the Terms of Service and Privacy Policy"
     }
   },
+  "account": {
+    "title": "Account",
+    "profile": "Profile",
+    "emailLabel": "Email address",
+    "planSection": "Plan",
+    "billing": "Manage Billing",
+    "currentBadge": "Current",
+    "changePlan": "Change",
+    "usageThisMonth": "Usage this month",
+    "pluginTitle": "NLE Plugin Integration",
+    "pluginSubtitle": "Premiere / FCP / DaVinci",
+    "pluginDescription": "Paste this token in the plugin login screen. The token expires in 1 hour.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "logout": "Log Out"
+  },
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Upload a video to start auto-editing",
@@ -162,10 +178,19 @@
     "noVideosSub": "Upload a video to get started",
     "remaining": "Videos remaining this month",
     "plan": "Current plan",
-    "upgrade": "Upgrade"
+    "upgrade": "Upgrade",
+    "history": "Processing History",
+    "cutCount": "{count} cuts",
+    "hasMp4": "MP4 included",
+    "statusCompleted": "Done",
+    "statusFailed": "Failed",
+    "statusProcessing": "Processing"
   },
   "upload": {
     "title": "Upload Video",
+    "duration": "Duration",
+    "durationUnit": "min",
+    "durationSeconds": "sec",
     "dropzone": "Drop your video here",
     "dropzoneOr": "or",
     "browse": "Browse files",
@@ -215,7 +240,9 @@
       "title": "Transcript",
       "description": "Full text of everything said in the video"
     },
-    "newVideo": "Process Another Video"
+    "newVideo": "Process Another Video",
+    "cutSummaryTitle": "Cut Points",
+    "cutUnit": "cuts"
   },
   "processing": {
     "title": "Editing...",

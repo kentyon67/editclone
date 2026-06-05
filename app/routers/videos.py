@@ -51,6 +51,15 @@ async def upload_video(
     content = await file.read()
     save_path.write_bytes(content)
 
+    # クラウドストレージにも保存（Railway 再起動後の復元用）
+    from app.services.storage import USE_CLOUD, upload_file as cloud_upload
+    if USE_CLOUD:
+        try:
+            cloud_upload(user["id"], video_id, content, saved_name)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Cloud upload failed (local copy kept): %s", e)
+
     log_event("upload", user_id=user["id"], video_id=video_id,
               metadata={"filename": file.filename, "size_bytes": len(content)})
 

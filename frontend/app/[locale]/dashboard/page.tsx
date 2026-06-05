@@ -16,19 +16,20 @@ function formatDate(iso: string, locale: string): string {
 }
 
 function StatusBadge({ status }: { status: UserJob["status"] }) {
+  const t = useTranslations("dashboard");
   if (status === "completed") return (
     <span className="flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-      <CheckCircle className="w-3 h-3" /> 完了
+      <CheckCircle className="w-3 h-3" /> {t("statusCompleted")}
     </span>
   );
   if (status === "failed") return (
     <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-      <XCircle className="w-3 h-3" /> 失敗
+      <XCircle className="w-3 h-3" /> {t("statusFailed")}
     </span>
   );
   return (
     <span className="flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
-      <Loader2 className="w-3 h-3 animate-spin" /> 処理中
+      <Loader2 className="w-3 h-3 animate-spin" /> {t("statusProcessing")}
     </span>
   );
 }
@@ -144,7 +145,7 @@ export default function DashboardPage() {
         {/* ジョブ履歴 */}
         {jobs.length > 0 && (
           <div>
-            <h2 className="text-lg font-bold text-gray-900 mb-3">処理履歴</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-3">{t("history")}</h2>
             <div className="space-y-2">
               {jobs.map((job) => (
                 <Link
@@ -166,10 +167,12 @@ export default function DashboardPage() {
                           {formatDate(job.created_at, locale)}
                         </span>
                         {job.cut_count !== null && (
-                          <span className="text-xs text-gray-400">カット {job.cut_count} 箇所</span>
+                          <span className="text-xs text-gray-400">
+                            {t("cutCount", { count: job.cut_count })}
+                          </span>
                         )}
                         {job.has_mp4 && (
-                          <span className="text-xs text-green-600 font-medium">MP4あり</span>
+                          <span className="text-xs text-green-600 font-medium">{t("hasMp4")}</span>
                         )}
                       </div>
                     </div>

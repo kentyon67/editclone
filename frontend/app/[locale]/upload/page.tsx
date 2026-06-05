@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles } from "lucide-react";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { uploadVideo, startProcessing, ApiError } from "@/lib/api";
 
 export default function UploadPage() {
@@ -13,6 +14,7 @@ export default function UploadPage() {
   const router = useRouter();
 
   const [file, setFile] = useState<File | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [noiseDb, setNoiseDb] = useState(-30);
@@ -23,11 +25,29 @@ export default function UploadPage() {
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  function readVideoDuration(f: File) {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      setVideoDuration(video.duration);
+      URL.revokeObjectURL(video.src);
+    };
+    video.onerror = () => setVideoDuration(null);
+    video.src = URL.createObjectURL(f);
+  }
+
+  function selectFile(f: File) {
+    setFile(f);
+    setVideoDuration(null);
+    readVideoDuration(f);
+  }
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped) setFile(dropped);
+    if (dropped) selectFile(dropped);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -89,6 +109,12 @@ export default function UploadPage() {
               <>
                 <p className="font-bold text-gray-900">{file.name}</p>
                 <p className="text-sm text-gray-400">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                {videoDuration !== null && (
+                  <p className="text-sm text-purple-600 font-medium">
+                    {t("duration")}: {Math.floor(videoDuration / 60)}{t("durationUnit")}{" "}
+                    {Math.round(videoDuration % 60)}{t("durationSeconds")}
+                  </p>
+                )}
               </>
             ) : (
               <>
@@ -105,7 +131,7 @@ export default function UploadPage() {
               type="file"
               accept=".mp4,.mov,.m4v"
               className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) selectFile(f); }}
             />
           </div>
 
@@ -222,6 +248,7 @@ export default function UploadPage() {
           </button>
         </form>
       </main>
+      <Footer />
     </div>
   );
 }

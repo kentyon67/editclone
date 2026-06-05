@@ -304,6 +304,18 @@ def run_job(job_id: str) -> None:
     try:
         path = job.video_path
 
+        # ローカルファイルがない場合（Railway 再起動後）はクラウドから復元
+        if not path.exists():
+            from app.services.storage import USE_CLOUD, get_local_copy
+            if USE_CLOUD and job.user_id:
+                try:
+                    path = get_local_copy(job.user_id, job.video_id, path.name, Path("uploads"))
+                    job.video_path = path
+                except Exception as e:
+                    logger.warning("クラウドからの動画復元に失敗: %s", e)
+            if not path.exists():
+                raise FileNotFoundError(f"動画ファイルが見つかりません: {path}")
+
         job.progress = "動画情報を取得中..."
         info = extract_video_info(path)
         total_duration = float(info.get("duration_seconds") or 0.0)

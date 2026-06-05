@@ -13,6 +13,13 @@ def _client():
     return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
+_VIDEO_CONTENT_TYPES = {
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+}
+
+
 def upload_file(user_id: str, video_id: str, file_bytes: bytes, filename: str) -> str:
     """
     クラウドストレージにアップロードする。
@@ -25,8 +32,10 @@ def upload_file(user_id: str, video_id: str, file_bytes: bytes, filename: str) -
         local_path.write_bytes(file_bytes)
         return str(local_path)
 
+    ext = Path(filename).suffix.lower()
+    content_type = _VIDEO_CONTENT_TYPES.get(ext, "video/mp4")
     path = f"{user_id}/{video_id}/{filename}"
-    _client().storage.from_(BUCKET).upload(path, file_bytes, {"content-type": "video/mp4"})
+    _client().storage.from_(BUCKET).upload(path, file_bytes, {"content-type": content_type})
     return path
 
 

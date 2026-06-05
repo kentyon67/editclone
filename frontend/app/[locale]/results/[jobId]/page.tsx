@@ -8,6 +8,7 @@ import {
   Share2, Clapperboard, MonitorPlay, Scissors
 } from "lucide-react";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
@@ -99,6 +100,12 @@ function CopyButton({ text }: { text: string }) {
       {copied ? t("copied") : t("copy")}
     </button>
   );
+}
+
+function fmtTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = (seconds % 60).toFixed(1);
+  return `${m}:${s.padStart(4, "0")}`;
 }
 
 function ResultsView({ job }: { job: JobStatusResponse }) {
@@ -227,20 +234,18 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
       {/* Cut summary */}
       {result.cuts && result.cuts.length > 0 && (
         <div className="mb-4 bg-white border border-gray-100 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-purple-500" />
-              <span className="font-bold text-gray-900 text-sm">
-                カット箇所 ({result.cuts.length}件)
-              </span>
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <Scissors className="w-4 h-4 text-purple-500" />
+            <span className="font-bold text-gray-900 text-sm">
+              {t("cutSummaryTitle")} ({result.cuts.length}{t("cutUnit")})
+            </span>
           </div>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {result.cuts.map((cut: { cut_start: number; cut_end: number; duration: number; reason: string; source?: string }, i: number) => (
               <div key={i} className="flex items-center gap-3 text-xs py-1.5 px-2 rounded-lg hover:bg-gray-50">
                 <span className="text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
                 <span className="font-mono text-gray-600 flex-shrink-0">
-                  {cut.cut_start.toFixed(1)}s – {cut.cut_end.toFixed(1)}s
+                  {fmtTime(cut.cut_start)} – {fmtTime(cut.cut_end)}
                 </span>
                 <span className="text-gray-400 flex-shrink-0">({cut.duration.toFixed(1)}s)</span>
                 <span className="text-gray-500 truncate">{cut.reason}</span>
@@ -358,6 +363,7 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
         )}
         {job?.status === "completed" && <ResultsView job={job} />}
       </main>
+      <Footer />
     </div>
   );
 }

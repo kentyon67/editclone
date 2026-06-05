@@ -154,6 +154,22 @@
       "terms": "利用規約とプライバシーポリシーに同意します"
     }
   },
+  "account": {
+    "title": "アカウント",
+    "profile": "プロフィール",
+    "emailLabel": "メールアドレス",
+    "planSection": "プラン",
+    "billing": "請求管理",
+    "currentBadge": "現在",
+    "changePlan": "変更",
+    "usageThisMonth": "今月の利用",
+    "pluginTitle": "NLE プラグイン連携",
+    "pluginSubtitle": "Premiere / FCP / DaVinci",
+    "pluginDescription": "プラグインのログイン画面でこのトークンを貼り付けてください。トークンは1時間で期限切れになります。",
+    "copy": "コピー",
+    "copied": "コピー済み",
+    "logout": "ログアウト"
+  },
   "dashboard": {
     "title": "ダッシュボード",
     "subtitle": "動画をアップロードして自動編集を開始",
@@ -162,10 +178,19 @@
     "noVideosSub": "動画をアップロードして始めましょう",
     "remaining": "今月の残り本数",
     "plan": "現在のプラン",
-    "upgrade": "アップグレード"
+    "upgrade": "アップグレード",
+    "history": "処理履歴",
+    "cutCount": "カット {count} 箇所",
+    "hasMp4": "MP4あり",
+    "statusCompleted": "完了",
+    "statusFailed": "失敗",
+    "statusProcessing": "処理中"
   },
   "upload": {
     "title": "動画をアップロード",
+    "duration": "尺",
+    "durationUnit": "分",
+    "durationSeconds": "秒",
     "dropzone": "ここに動画をドロップ",
     "dropzoneOr": "または",
     "browse": "ファイルを選択",
@@ -215,7 +240,9 @@
       "title": "文字起こし",
       "description": "動画のセリフを全文テキスト化したものです"
     },
-    "newVideo": "別の動画を処理する"
+    "newVideo": "別の動画を処理する",
+    "cutSummaryTitle": "カット箇所",
+    "cutUnit": "件"
   },
   "processing": {
     "title": "編集中...",
