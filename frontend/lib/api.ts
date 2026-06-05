@@ -307,3 +307,54 @@ export async function deleteReferenceVideo(profileId: string, videoId: string): 
   });
   if (!res.ok) return handleError(res, "Delete reference video failed");
 }
+
+export async function aiRefineProfile(profileId: string): Promise<{ suggested_prompt: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/ai-refine`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "AI refine failed");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Projects (Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface ProjectRevision {
+  id: string;
+  project_id: string;
+  revision_number: number;
+  source: "web" | "plugin";
+  notes: string;
+  result_path: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface Project {
+  id: string;
+  user_id: string;
+  name: string;
+  source_job_id: string;
+  style_profile_id: string | null;
+  sync_status: "local" | "synced" | "conflict";
+  created_at: string;
+  updated_at: string;
+  project_revisions: ProjectRevision[];
+}
+
+export async function listProjects(): Promise<{ projects: Project[] }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/projects`, { headers });
+  if (!res.ok) return { projects: [] };
+  return res.json();
+}
+
+export async function getProject(projectId: string): Promise<Project | null> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/projects/${projectId}`, { headers });
+  if (!res.ok) return null;
+  return res.json();
+}

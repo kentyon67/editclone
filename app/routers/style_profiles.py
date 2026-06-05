@@ -128,3 +128,22 @@ def delete_ref_video(profile_id: str, video_id: str, user: dict = Depends(requir
     if not ok:
         raise HTTPException(status_code=404, detail="参考動画が見つかりません")
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# AI Profile Refinement
+# ---------------------------------------------------------------------------
+
+@router.post("/{profile_id}/ai-refine")
+def ai_refine(profile_id: str, user: dict = Depends(require_user)):
+    try:
+        suggested = svc.ai_refine_profile(profile_id, user["id"])
+        return {"suggested_prompt": suggested}
+    except PermissionError:
+        raise HTTPException(status_code=404, detail="プロファイルが見つかりません")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI改善の生成に失敗しました: {e}")

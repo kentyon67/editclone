@@ -1,4 +1,4 @@
--- EditClone Supabase Schema v4
+-- EditClone Supabase Schema v5
 -- Supabase SQL Editor で実行してください
 -- 何度実行しても安全（IF NOT EXISTS / DO ブロック対応済み）
 
@@ -115,6 +115,39 @@ create table if not exists public.feedback_logs (
 alter table public.feedback_logs enable row level security;
 
 -- =====================
+-- projects（編集プロジェクト） Phase 3
+-- =====================
+create table if not exists public.projects (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null,
+  source_job_id text not null,
+  style_profile_id uuid references public.style_profiles(id) on delete set null,
+  sync_status text not null default 'local' check (sync_status in ('local', 'synced', 'conflict')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.projects enable row level security;
+
+-- =====================
+-- project_revisions（エクスポート履歴） Phase 3
+-- =====================
+create table if not exists public.project_revisions (
+  id uuid default gen_random_uuid() primary key,
+  project_id uuid references public.projects(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  revision_number int not null default 1,
+  source text not null default 'web' check (source in ('web', 'plugin')),
+  notes text default '',
+  result_path text default '',
+  metadata jsonb,
+  created_at timestamptz default now()
+);
+
+alter table public.project_revisions enable row level security;
+
+-- =====================
 -- analytics_events（行動ログ）
 -- =====================
 create table if not exists public.analytics_events (
@@ -187,6 +220,12 @@ begin
 
   -- feedback_logs
   drop policy if exists "Users can manage own feedback" on public.feedback_logs;
+
+  -- projects
+  drop policy if exists "Users can manage own projects" on public.projects;
+
+  -- project_revisions
+  drop policy if exists "Users can manage own project revisions" on public.project_revisions;
 end;
 $$;
 
@@ -226,6 +265,16 @@ create policy "Users can manage own reference videos"
 
 create policy "Users can manage own feedback"
   on public.feedback_logs for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can manage own projects"
+  on public.projects for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can manage own project revisions"
+  on public.project_revisions for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 

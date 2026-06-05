@@ -121,7 +121,7 @@ def list_user_jobs(user_id: str) -> list[Job]:
                 _client().table("jobs")
                 .select("*")
                 .eq("user_id", user_id)
-                .eq("status", "completed")
+                .in_("status", ["completed", "failed"])
                 .order("created_at", desc=True)
                 .limit(20)
                 .execute()
@@ -444,6 +444,37 @@ def run_job(job_id: str) -> None:
 
         job.progress = "完了"
         _persist_to_supabase(job)
+
+        # Phase 3: プロジェクト自動作成
+        if job.user_id:
+            try:
+                from app.services.projects import create_project, add_revision
+                from app.services.style_profiles import get_active_profile
+
+                active_profile = get_active_profile(job.user_id)
+                project = create_project(
+                    user_id=job.user_id,
+                    name=job.video_path.stem,
+                    source_job_id=job.id,
+                    style_profile_id=active_profile["id"] if active_profile else None,
+                )
+                if project:
+                    cuts = (job.result or {}).get("cuts") or []
+                    add_revision(
+                        project_id=project["id"],
+                        user_id=job.user_id,
+                        revision_number=1,
+                        source="web",
+                        metadata={
+                            "cut_count": len(cuts),
+                            "has_mp4": bool((job.result or {}).get("has_mp4")),
+                            "prompt": job.prompt,
+                            "noise_db": job.noise_db,
+                            "min_duration": job.min_duration,
+                        },
+                    )
+            except Exception as e:
+                logger.warning("プロジェクト自動作成に失敗: %s", e)
 
     except Exception as exc:
         job.status = JobStatus.failed

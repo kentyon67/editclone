@@ -1,11 +1,17 @@
 "use client";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { Upload, Film, ChevronRight, Loader2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Upload, Film, ChevronRight, Loader2, CheckCircle, XCircle,
+  Clock, Layers, Wifi, AlertTriangle,
+} from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getUserUsage, getUserJobs, type UsageResponse, type UserJob } from "@/lib/api";
+import {
+  getUserUsage, getUserJobs, listProjects,
+  type UsageResponse, type UserJob, type Project,
+} from "@/lib/api";
 import { setPluginMode, type PluginNLE } from "@/lib/plugin";
 
 function formatDate(iso: string, locale: string): string {
@@ -34,12 +40,28 @@ function StatusBadge({ status }: { status: UserJob["status"] }) {
   );
 }
 
+function SyncBadge({ status }: { status: Project["sync_status"] }) {
+  const t = useTranslations("dashboard");
+  if (status === "synced") return (
+    <span className="flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
+      <Wifi className="w-3 h-3" /> {t("syncSynced")}
+    </span>
+  );
+  if (status === "conflict") return (
+    <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">
+      <AlertTriangle className="w-3 h-3" /> {t("syncConflict")}
+    </span>
+  );
+  return null;
+}
+
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
   const locale = useLocale();
 
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [jobs, setJobs] = useState<UserJob[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -54,6 +76,7 @@ export default function DashboardPage() {
         setUsage({ plan: "free", used: 0, limit: 3, remaining: 3, max_duration_seconds: 180 })
       ),
       getUserJobs().then((d) => setJobs(d.jobs)).catch(() => {}),
+      listProjects().then((d) => setProjects(d.projects)).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -64,8 +87,21 @@ export default function DashboardPage() {
   const displayRemaining = remaining === null ? "∞" : remaining;
   const displayLimit = limit === null ? "∞" : limit;
 
-  const nextPlan: Record<string, string> = { free: "Pro ¥980/月", pro: "Creator ¥2,980/月", creator: "Studio ¥9,800/月" };
-  const upgradeLabel = nextPlan[plan];
+  const nextPlanLabels: Record<string, string> = {
+    free: t("nextPlanFree"),
+    pro: t("nextPlanPro"),
+    creator: t("nextPlanCreator"),
+  };
+  const upgradeLabel = nextPlanLabels[plan];
+
+  // jobId → project のマップ（sync バッジ表示に使用）
+  const jobProjectMap = useMemo(() => {
+    const map: Record<string, Project> = {};
+    for (const p of projects) {
+      map[p.source_job_id] = p;
+    }
+    return map;
+  }, [projects]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -78,6 +114,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          {/* プランカード */}
           <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
             <p className="text-sm text-gray-500 mb-1">{t("plan")}</p>
             {loading ? (
@@ -87,6 +124,7 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* 残り本数カード */}
           <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
             <p className="text-sm text-gray-500 mb-1">{t("remaining")}</p>
             {loading ? (
@@ -109,6 +147,7 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* プロジェクト数 or アップグレードカード */}
           {upgradeLabel ? (
             <div className="bg-gradient-to-br from-purple-600 to-blue-600 rounded-2xl p-5 flex items-center justify-between">
               <div>
@@ -123,12 +162,22 @@ export default function DashboardPage() {
               </Link>
             </div>
           ) : (
-            <div className="bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl p-5 flex items-center">
-              <p className="text-white font-bold">Studio — 無制限</p>
+            <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
+              <p className="text-sm text-gray-500 mb-1">{t("projects")}</p>
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              ) : (
+                <div className="flex items-end gap-2">
+                  <p className="text-2xl font-black text-gray-900">{t("projectCount", { count: projects.length })}</p>
+                  <Layers className="w-5 h-5 text-purple-400 mb-0.5" />
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-1">{t("studioUnlimited")}</p>
             </div>
           )}
         </div>
 
+        {/* アップロードボタン */}
         <Link
           href={`/${locale}/upload`}
           className="flex items-center justify-center gap-3 w-full py-16 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 transition-all group mb-8"
@@ -147,42 +196,46 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900 mb-3">{t("history")}</h2>
             <div className="space-y-2">
-              {jobs.map((job) => (
-                <Link
-                  key={job.job_id}
-                  href={`/${locale}/results/${job.job_id}`}
-                  className="flex items-center justify-between gap-4 bg-white rounded-2xl border border-gray-100 hover:border-purple-200 hover:shadow-md transition-all p-4 group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Film className="w-5 h-5 text-purple-500" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate text-sm">
-                        {job.video_filename || job.video_id}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <Clock className="w-3 h-3" />
-                          {formatDate(job.created_at, locale)}
-                        </span>
-                        {job.cut_count !== null && (
-                          <span className="text-xs text-gray-400">
-                            {t("cutCount", { count: job.cut_count })}
+              {jobs.map((job) => {
+                const project = jobProjectMap[job.job_id];
+                return (
+                  <Link
+                    key={job.job_id}
+                    href={`/${locale}/results/${job.job_id}`}
+                    className="flex items-center justify-between gap-4 bg-white rounded-2xl border border-gray-100 hover:border-purple-200 hover:shadow-md transition-all p-4 group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center flex-shrink-0">
+                        <Film className="w-5 h-5 text-purple-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate text-sm">
+                          {job.video_filename || job.video_id}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(job.created_at, locale)}
                           </span>
-                        )}
-                        {job.has_mp4 && (
-                          <span className="text-xs text-green-600 font-medium">{t("hasMp4")}</span>
-                        )}
+                          {job.cut_count !== null && (
+                            <span className="text-xs text-gray-400">
+                              {t("cutCount", { count: job.cut_count })}
+                            </span>
+                          )}
+                          {job.has_mp4 && (
+                            <span className="text-xs text-green-600 font-medium">{t("hasMp4")}</span>
+                          )}
+                          {project && <SyncBadge status={project.sync_status} />}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <StatusBadge status={job.status} />
-                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors" />
-                  </div>
-                </Link>
-              ))}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <StatusBadge status={job.status} />
+                      <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-purple-400 transition-colors" />
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}

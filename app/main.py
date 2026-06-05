@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.routers import billing, jobs, plugin, style_profiles, usage, videos
+from app.routers import billing, jobs, plugin, projects, style_profiles, usage, videos
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="EditClone", version="0.4.0", lifespan=lifespan)
+app = FastAPI(title="EditClone", version="0.5.0", lifespan=lifespan)
 
 _origins_env = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
@@ -54,8 +54,9 @@ app.include_router(billing.router)
 app.include_router(usage.router)
 app.include_router(plugin.router)
 app.include_router(style_profiles.router)
+app.include_router(projects.router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": "0.5.0"}

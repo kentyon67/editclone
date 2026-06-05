@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
-  Loader2, X, Wand2, Film, ChevronDown,
+  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -12,6 +12,7 @@ import {
   listStyleProfiles, createStyleProfile, updateStyleProfile,
   deleteStyleProfile, activateStyleProfile,
   listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
+  aiRefineProfile,
   ApiError,
   type StyleProfile, type ReferenceVideo,
 } from "@/lib/api";
@@ -266,16 +267,105 @@ function ReferenceVideoSection({ profileId }: { profileId: string }) {
   );
 }
 
+function AiRefineSection({
+  profile,
+  onApply,
+}: {
+  profile: StyleProfile;
+  onApply: (prompt: string) => Promise<void>;
+}) {
+  const t = useTranslations("styles");
+  const [refining, setRefining] = useState(false);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [applying, setApplying] = useState(false);
+
+  async function handleRefine() {
+    setRefining(true);
+    setError("");
+    setSuggestion(null);
+    try {
+      const { suggested_prompt } = await aiRefineProfile(profile.id);
+      setSuggestion(suggested_prompt);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "エラーが発生しました");
+    } finally {
+      setRefining(false);
+    }
+  }
+
+  async function handleApply() {
+    if (!suggestion) return;
+    setApplying(true);
+    try {
+      await onApply(suggestion);
+      setSuggestion(null);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-50">
+      {suggestion ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-purple-700 flex items-center gap-1">
+            <BrainCircuit className="w-3 h-3" /> {t("refineTitle")}
+          </p>
+          <p className="text-xs text-gray-700 bg-purple-50 rounded-xl p-3 leading-relaxed">
+            {suggestion}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleApply}
+              disabled={applying}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-50"
+            >
+              {applying ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+              {t("refineApply")}
+            </button>
+            <button
+              onClick={() => setSuggestion(null)}
+              className="px-3 py-1.5 border border-gray-200 text-gray-500 text-xs rounded-xl hover:bg-gray-50"
+            >
+              {t("refineDismiss")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <button
+            onClick={handleRefine}
+            disabled={refining}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-purple-600 border border-purple-200 rounded-xl hover:bg-purple-50 disabled:opacity-50 transition-colors font-medium"
+          >
+            {refining
+              ? <><Loader2 className="w-3 h-3 animate-spin" /> {t("refining")}</>
+              : <><BrainCircuit className="w-3 h-3" /> {t("refine")}</>
+            }
+          </button>
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+          {!error && !refining && (
+            <p className="text-xs text-gray-300 text-center">{t("refineNoFeedback")}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileCard({
   profile,
   onActivate,
   onEdit,
   onDelete,
+  onRefineApply,
 }: {
   profile: StyleProfile;
   onActivate: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onRefineApply: (prompt: string) => Promise<void>;
 }) {
   const t = useTranslations("styles");
   const locale = useLocale();
@@ -348,6 +438,7 @@ function ProfileCard({
       </div>
 
       <ReferenceVideoSection profileId={profile.id} />
+      <AiRefineSection profile={profile} onApply={onRefineApply} />
     </div>
   );
 }
@@ -378,6 +469,11 @@ export default function StylesPage() {
     if (!editingProfile) return;
     await updateStyleProfile(editingProfile.id, data);
     setEditingProfile(null);
+    await load();
+  }
+
+  async function handleRefineApply(profileId: string, prompt: string) {
+    await updateStyleProfile(profileId, { default_prompt: prompt });
     await load();
   }
 
@@ -464,6 +560,7 @@ export default function StylesPage() {
                 onActivate={() => handleActivate(p.id)}
                 onEdit={() => { setEditingProfile(p); setShowForm(false); }}
                 onDelete={() => handleDelete(p.id)}
+                onRefineApply={(prompt) => handleRefineApply(p.id, prompt)}
               />
             ))}
           </div>

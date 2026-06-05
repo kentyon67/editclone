@@ -233,3 +233,84 @@ def delete_reference_video(video_id: str, profile_id: str, user_id: str) -> bool
     except Exception as e:
         logger.warning("delete_reference_video failed: %s", e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# AI Profile Refinement (Phase 2)
+# ---------------------------------------------------------------------------
+
+def ai_refine_profile(profile_id: str, user_id: str) -> str:
+    """フィードバック履歴と参考動画をもとに Claude がプロンプト改善を提案する。"""
+    import os
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY が設定されていません。Railway の環境変数を確認してください。")
+
+    profile = get_profile(profile_id, user_id)
+    if profile is None:
+        raise ValueError("プロファイルが見つかりません")
+
+    # 最新フィードバック（ユーザー全体、最大15件）
+    try:
+        fb_resp = (
+            _client().table("feedback_logs")
+            .select("action, notes")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(15)
+            .execute()
+        )
+        feedback_data = fb_resp.data or []
+    except Exception:
+        feedback_data = []
+
+    # このプロファイルに紐づく参考動画
+    ref_videos = list_reference_videos(profile_id, user_id)
+
+    current_prompt = (profile.get("default_prompt") or "").strip()
+
+    # Claude へのコンテキスト構築
+    action_labels = {"accept": "満足", "partial": "まあまあ", "reject": "やり直したい"}
+    feedback_lines = [
+        "- " + action_labels.get(f.get("action", ""), f.get("action", ""))
+        + (f": {f['notes'].strip()}" if f.get("notes", "").strip() else "")
+        for f in feedback_data
+    ]
+    ref_lines = [
+        f"- {v.get('oembed_title') or v.get('url')} ({v.get('oembed_provider') or 'unknown'})"
+        for v in ref_videos
+    ]
+
+    system_prompt = (
+        "あなたは動画編集AIアシスタントです。\n"
+        "ユーザーの編集スタイルを分析して、AIへの編集指示プロンプトを改善します。\n\n"
+        "出力ルール:\n"
+        "- 改善されたプロンプト本文のみを出力すること\n"
+        "- 1〜3文の日本語で簡潔に\n"
+        "- 前置きや説明は一切不要\n"
+        "- 例: 「冒頭の挨拶をカットしてください。言い淀み（えーと、あの）も削除してください。」"
+    )
+
+    user_message = (
+        f"## 現在のプロンプト\n{current_prompt or '（未設定）'}\n\n"
+        "## 参考動画（目標の編集スタイル）\n"
+        + ("\n".join(ref_lines) if ref_lines else "（未設定）") + "\n\n"
+        + "## 過去のフィードバック（最新順）\n"
+        + ("\n".join(feedback_lines) if feedback_lines else "（フィードバックなし）") + "\n\n"
+        + "上記をもとに、改善されたプロンプトを提案してください。"
+    )
+
+    try:
+        import anthropic
+        model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model=model,
+            max_tokens=200,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return message.content[0].text.strip()
+    except Exception as e:
+        raise RuntimeError(f"Claude API エラー: {e}") from e
