@@ -5,11 +5,11 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus
+  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, API_URL, JobStatusResponse, postFeedback } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, API_URL, JobStatusResponse, postFeedback, type Project } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -118,6 +118,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [sessionToken, setSessionToken] = useState<string>("");
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [linkedProject, setLinkedProject] = useState<Project | null>(null);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -127,7 +128,11 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
     getActiveStyleProfile().then(({ profile }) => {
       if (profile) setActiveProfileId(profile.id);
     }).catch(() => {});
-  }, []);
+    listProjects().then(({ projects }) => {
+      const p = projects.find((proj) => proj.source_job_id === job.job_id);
+      if (p) setLinkedProject(p);
+    }).catch(() => {});
+  }, [job.job_id]);
 
   async function handleSaveMp4() {
     const mp4Url = getMp4Url(job.job_id);
@@ -364,7 +369,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         )}
       </div>
 
-      <div className="mt-6 text-center">
+      <div className="mt-6 flex items-center justify-center gap-4 flex-wrap">
         <Link
           href={`/${locale}/upload`}
           className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium"
@@ -372,6 +377,15 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
           <ArrowLeft className="w-4 h-4" />
           {t("newVideo")}
         </Link>
+        {linkedProject && (
+          <Link
+            href={`/${locale}/projects/${linkedProject.id}`}
+            className="inline-flex items-center gap-2 text-gray-500 hover:text-purple-600 font-medium text-sm border border-gray-200 hover:border-purple-300 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Layers className="w-4 h-4" />
+            {t("viewProject")}
+          </Link>
+        )}
       </div>
     </div>
   );

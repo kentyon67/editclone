@@ -258,6 +258,7 @@
       "description": "動画のセリフを全文テキスト化したものです"
     },
     "newVideo": "別の動画を処理する",
+    "viewProject": "プロジェクト詳細を見る",
     "loadError": "ジョブの取得に失敗しました",
     "downloadSrt": "SRTをダウンロード",
     "cutSummaryTitle": "カット箇所",

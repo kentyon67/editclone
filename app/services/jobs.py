@@ -459,14 +459,14 @@ def run_job(job_id: str) -> None:
                     style_profile_id=active_profile["id"] if active_profile else None,
                 )
                 if project:
-                    cuts = (job.result or {}).get("cuts") or []
+                    result_cuts = (job.result or {}).get("cuts") or []
                     add_revision(
                         project_id=project["id"],
                         user_id=job.user_id,
                         revision_number=1,
                         source="web",
                         metadata={
-                            "cut_count": len(cuts),
+                            "cut_count": len(result_cuts),
                             "has_mp4": bool((job.result or {}).get("has_mp4")),
                             "prompt": job.prompt,
                             "noise_db": job.noise_db,
