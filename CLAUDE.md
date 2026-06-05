@@ -19,7 +19,7 @@
 
 ## 現在のフェーズ
 
-### Phase 1: Web v1 安定化 — 🔄 進行中
+### Phase 1: Web v1 安定化 — ✅ 完了
 
 | 機能 | 状態 | ファイル |
 |------|------|------|
@@ -29,7 +29,7 @@
 | Whisper文字起こし（faster-whisper） | ✅ | `app/services/transcription.py` |
 | 無音検出（ffmpeg silencedetect） | ✅ | `app/services/silence.py` |
 | カット提案 | ✅ | `app/services/cut_suggestion.py` |
-| FCPXML生成（動画+ZIP） | ✅ | `app/services/fcpxml.py` |
+| FCPXML生成（字幕 caption lane 付き） | ✅ | `app/services/fcpxml.py` |
 | YouTubeチャプター生成 | ✅ | `app/services/chapters.py` |
 | SRT字幕ファイル生成 | ✅ | `app/services/srt.py` |
 | 非同期ジョブ処理 | ✅ | `app/services/jobs.py` |
@@ -48,36 +48,44 @@
 | Claude API 編集指示（プロンプト → セマンティックカット） | ✅ | `app/services/ai_edit.py` |
 | NLE プラグイン直接インポート（FCP/Premiere/DaVinci） | ✅ | `plugins/` |
 | Supabase ジョブ永続化（Railway 再起動耐性） | ✅ | `app/services/jobs.py` |
-| NTSC タイムコード精度修正（29.97fps） | ✅ | `app/services/fcpxml.py`, `premiere_xml.py` |
-| ダッシュボード処理履歴表示 | ✅ | `frontend/app/[locale]/dashboard/` |
+| NTSC ドロップフレームタイムコード（29.97fps） | ✅ | `app/services/fcpxml.py`, `premiere_xml.py`, `edl.py` |
+| ダッシュボード処理履歴表示（全ステータス） | ✅ | `frontend/app/[locale]/dashboard/` |
 | 本番環境変数設定（Secret） | 🔄 | ユーザー手動設定待ち |
-| Supabase schema.sql 実行 | 🔄 | ユーザー手動設定待ち |
+| Supabase schema.sql v5 実行 | 🔄 | ユーザー手動設定待ち |
 
-### Phase 2: Style Engine v1 — ⏳ 未着手
+### Phase 2: Style Engine v1 — ✅ 完了
 
-| 機能 | 備考 |
-|------|------|
-| Style Profile CRUD | 編集スタイルの保存・管理 |
-| 参考動画 URL 登録（oEmbed のみ） | 動画ダウンロードは禁止 |
-| 参考動画ファイル分析 | カットテンポ・字幕密度・無音量 |
-| Style Profile 生成・適用 | LLM（Claude API）連携 |
-| 採用 / 却下フィードバック記録 | 学習ループの基盤 |
+| 機能 | 状態 | ファイル |
+|------|------|------|
+| Style Profile CRUD | ✅ | `app/services/style_profiles.py`, `app/routers/style_profiles.py` |
+| 参考動画 URL 登録（oEmbed のみ） | ✅ | `app/services/style_profiles.py` |
+| フィードバック記録（accept/partial/reject） | ✅ | `app/services/style_profiles.py` |
+| AI Profile 改善提案（Claude API） | ✅ | `app/services/style_profiles.py` |
+| フィードバック統計 API | ✅ | `GET /style-profiles/{id}/stats` |
+| Styles ページ UI（参考動画・AI改善・stats表示） | ✅ | `frontend/app/[locale]/styles/` |
 
-### Phase 3: Project Sync Foundation — ⏳ 未着手
+### Phase 3: Project Sync Foundation — ✅ 実装済み
 
-| 機能 | 備考 |
-|------|------|
-| Project / ProjectRevision モデル | DB スキーマ追加 |
-| Export 履歴・Sync Status 管理 | Web ↔ Plugin 同期基盤 |
-| Conflict Handling 基本実装 | Plugin 優先・手動解決 |
-| Sync API 設計 | Plugin 連携準備 |
+| 機能 | 状態 | ファイル |
+|------|------|------|
+| Project / ProjectRevision モデル | ✅ | `supabase/schema.sql` v5 |
+| Export 履歴・Sync Status 管理 | ✅ | `app/services/projects.py` |
+| ジョブ完了時プロジェクト自動作成 | ✅ | `app/services/jobs.py` |
+| プロジェクト詳細ページ | ✅ | `frontend/app/[locale]/projects/[id]/` |
+| 再エクスポート（同設定で再処理） | ✅ | `POST /projects/{id}/re-export` |
+| Plugin リビジョン受信 + 競合検出 | ✅ | `POST /projects/{id}/revisions` |
+| Dashboard プロジェクトリンク | ✅ | `frontend/app/[locale]/dashboard/` |
+| Results ページプロジェクトリンク | ✅ | `frontend/app/[locale]/results/` |
 
-### Phase 4: Rich Editing — ⏳ 未着手
+### Phase 4: Rich Editing — 🔄 進行中
 
-| 機能 | 備考 |
-|------|------|
-| テロップスタイル反映 | FCPXML・Premiere XML |
-| 画像・写真スライド動画化 | 画像素材対応 |
+| 機能 | 状態 | 備考 |
+|------|------|------|
+| FCPXML 字幕 caption lane | ✅ | `app/services/fcpxml.py` |
+| EDL ドロップフレーム対応 | ✅ | `app/services/edl.py` |
+| DaVinci スクリプト ジョブ一覧選択 | ✅ | `plugins/davinci-script/` |
+| テロップスタイル設定（フォント・位置） | ⏳ | Style Profile 拡張 |
+| 画像・写真スライド動画化 | ⏳ | 画像素材対応 |
 | ズーム演出・B-roll 提案 | 演出強化 |
 | Premiere XML / DaVinci XML 出力 | マルチ NLE 対応 |
 
