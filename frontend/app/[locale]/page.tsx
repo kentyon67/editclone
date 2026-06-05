@@ -2,6 +2,7 @@ import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import {
   Scissors, FileText, BookOpen, Film, Captions, Zap,
+  Sparkles, Layers,
   ArrowRight, CheckCircle,
 } from "lucide-react";
 import Header from "@/components/Header";
@@ -85,8 +86,10 @@ function Hero() {
 
 function Features() {
   const t = useTranslations("features");
-  const icons = [Scissors, FileText, BookOpen, Film, Captions, Zap];
-  const keys = ["silence", "transcript", "chapters", "fcpxml", "mp4", "async"] as const;
+  const icons = [Scissors, FileText, BookOpen, Film, Captions, Zap, Sparkles, Layers];
+  const keys = ["silence", "transcript", "chapters", "fcpxml", "mp4", "async", "style", "sync"] as const;
+  // style と sync は差別化機能としてハイライト
+  const highlighted = new Set(["style", "sync"]);
 
   return (
     <section id="features" className="py-24 px-4 bg-white">
@@ -96,19 +99,30 @@ function Features() {
           <p className="text-gray-500 text-lg max-w-2xl mx-auto">{t("subtitle")}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {keys.map((key, i) => {
             const Icon = icons[i];
+            const isHL = highlighted.has(key);
             return (
               <div
                 key={key}
-                className="p-6 rounded-2xl border border-purple-100 hover:border-purple-300 hover:shadow-lg hover:shadow-purple-100 transition-all group bg-gradient-to-br from-white to-purple-50"
+                className={`p-6 rounded-2xl border-2 hover:shadow-lg transition-all group ${
+                  isHL
+                    ? "border-purple-400 bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-200"
+                    : "border-purple-100 hover:border-purple-300 hover:shadow-purple-100 bg-gradient-to-br from-white to-purple-50"
+                }`}
               >
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
+                  isHL ? "bg-white/20" : "bg-gradient-to-br from-purple-500 to-blue-600"
+                }`}>
                   <Icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="font-bold text-gray-900 mb-2 text-lg">{t(`items.${key}.title`)}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{t(`items.${key}.description`)}</p>
+                <h3 className={`font-bold mb-2 text-lg ${isHL ? "text-white" : "text-gray-900"}`}>
+                  {t(`items.${key}.title`)}
+                </h3>
+                <p className={`text-sm leading-relaxed ${isHL ? "text-white/80" : "text-gray-500"}`}>
+                  {t(`items.${key}.description`)}
+                </p>
               </div>
             );
           })}

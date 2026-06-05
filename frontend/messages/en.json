@@ -45,6 +45,14 @@
       "async": {
         "title": "AI Editing Instructions",
         "description": "Give Claude natural language instructions like 'cut the intro greeting' or 'remove all filler words'."
+      },
+      "style": {
+        "title": "Style Learning",
+        "description": "Gets smarter with every use. AI refines your editing style from reference videos and feedback automatically."
+      },
+      "sync": {
+        "title": "Project Sync",
+        "description": "Edit on web → fine-tune in FCP or Premiere → changes sync back to web. The learning loop never stops."
       }
     }
   },

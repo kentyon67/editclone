@@ -45,6 +45,14 @@
       "async": {
         "title": "AI編集指示",
         "description": "「冒頭の挨拶をカット」「言い淀みを全部削除」など自然言語でClaudeに編集を指示できます。"
+      },
+      "style": {
+        "title": "スタイル学習",
+        "description": "使うたびにあなたの編集スタイルを学習。参考動画・フィードバックをもとにAIが自動改善します。"
+      },
+      "sync": {
+        "title": "Project Sync",
+        "description": "Webで自動編集 → FCPやPremiereで調整 → 変更内容がWebに自動同期。学習ループが回り続けます。"
       }
     }
   },
