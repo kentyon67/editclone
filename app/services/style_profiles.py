@@ -88,7 +88,7 @@ def update_profile(profile_id: str, user_id: str, data: dict) -> Optional[dict]:
         return get_profile(profile_id, user_id)
     try:
         import datetime
-        payload["updated_at"] = datetime.datetime.utcnow().isoformat()
+        payload["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         resp = (
             _client().table("style_profiles")
             .update(payload)
@@ -115,7 +115,7 @@ def set_active_profile(profile_id: str, user_id: str) -> bool:
     """指定プロファイルをアクティブにし、他を非アクティブにする。"""
     try:
         import datetime
-        now = datetime.datetime.utcnow().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         # 全て非アクティブ
         _client().table("style_profiles").update({"is_active": False, "updated_at": now}).eq("user_id", user_id).execute()
         # 指定プロファイルをアクティブ

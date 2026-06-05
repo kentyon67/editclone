@@ -71,7 +71,7 @@ def update_sync_status(project_id: str, user_id: str, status: str) -> bool:
         import datetime
         _client().table("projects").update({
             "sync_status": status,
-            "updated_at": datetime.datetime.utcnow().isoformat(),
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }).eq("id", project_id).eq("user_id", user_id).execute()
         return True
     except Exception as e:

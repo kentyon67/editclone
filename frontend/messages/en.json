@@ -257,6 +257,8 @@
       "description": "Full text of everything said in the video"
     },
     "newVideo": "Process Another Video",
+    "loadError": "Failed to load job",
+    "downloadSrt": "Download SRT",
     "cutSummaryTitle": "Cut Points",
     "cutUnit": "cuts",
     "feedback": {

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse, postFeedback } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, API_URL, JobStatusResponse, postFeedback } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -117,12 +117,16 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [pluginNLE, setPluginNLE] = useState<PluginNLE>(null);
   const [sessionToken, setSessionToken] = useState<string>("");
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
     createClient().auth.getSession().then(({ data }) => {
       if (data.session?.access_token) setSessionToken(data.session.access_token);
     });
+    getActiveStyleProfile().then(({ profile }) => {
+      if (profile) setActiveProfileId(profile.id);
+    }).catch(() => {});
   }, []);
 
   async function handleSaveMp4() {
@@ -292,9 +296,26 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
 
         {result.srt && (
           <div className="bg-white rounded-2xl p-5 border border-purple-100">
-            <div className="flex items-center gap-3 mb-2">
-              <Captions className="w-5 h-5 text-blue-500" />
-              <h3 className="font-bold text-gray-900">{t("srt.title")}</h3>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <Captions className="w-5 h-5 text-blue-500" />
+                <h3 className="font-bold text-gray-900">{t("srt.title")}</h3>
+              </div>
+              <button
+                onClick={() => {
+                  const blob = new Blob([result.srt], { type: "text/plain;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${job.video_id}.srt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                {t("downloadSrt")}
+              </button>
             </div>
             <p className="text-sm text-gray-500">{t("srt.description")}</p>
           </div>
@@ -324,7 +345,11 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
                   <button
                     key={action}
                     onClick={async () => {
-                      await postFeedback({ job_id: job.job_id, action }).catch(() => {});
+                      await postFeedback({
+                        job_id: job.job_id,
+                        action,
+                        style_profile_id: activeProfileId ?? undefined,
+                      }).catch(() => {});
                       setFeedbackSent(action);
                     }}
                     className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition-colors ${colors[action]}`}
@@ -354,6 +379,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
 
 export default function ResultsPage({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = use(params);
+  const t = useTranslations("results");
   const [job, setJob] = useState<JobStatusResponse | null>(null);
   const [fatalError, setFatalError] = useState("");
 
@@ -368,7 +394,7 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
           timer = setTimeout(poll, 2000);
         }
       } catch {
-        setFatalError("ジョブの取得に失敗しました");
+        setFatalError(t("loadError"));
       }
     }
 

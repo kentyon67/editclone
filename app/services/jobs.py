@@ -2,7 +2,7 @@ import io
 import logging
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -82,7 +82,7 @@ class Job:
         self.progress: str = ""
         self.result: dict | None = None
         self.error: str | None = None
-        self.created_at = datetime.utcnow().isoformat()
+        self.created_at = datetime.now(timezone.utc).isoformat()
         self.completed_at: str | None = None
 
 
@@ -426,7 +426,7 @@ def run_job(job_id: str) -> None:
             "edl_bytes": edl_content.encode("utf-8"),
         }
         job.status = JobStatus.completed
-        job.completed_at = datetime.utcnow().isoformat()
+        job.completed_at = datetime.now(timezone.utc).isoformat()
 
         log_event(
             "process_complete",
@@ -479,7 +479,7 @@ def run_job(job_id: str) -> None:
     except Exception as exc:
         job.status = JobStatus.failed
         job.error = str(exc)
-        job.completed_at = datetime.utcnow().isoformat()
+        job.completed_at = datetime.now(timezone.utc).isoformat()
         log_event(
             "process_failed",
             video_id=job.video_id,
