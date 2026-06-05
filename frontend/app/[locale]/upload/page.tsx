@@ -121,7 +121,7 @@ export default function UploadPage() {
             <div className="bg-white rounded-2xl p-5 border border-gray-200 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t("noiseDb")}: <span className="text-purple-600 font-bold">{noiseDb} dB</span>
+                  {t("noiseDb")}
                 </label>
                 <input
                   type="range"
@@ -132,14 +132,14 @@ export default function UploadPage() {
                   className="w-full accent-purple-600"
                 />
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>-60 dB（敏感）</span>
-                  <span>-10 dB（鈍感）</span>
+                  <span>敏感（小さな無音もカット）</span>
+                  <span>鈍感（大きな無音のみ）</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t("minDuration")}: <span className="text-purple-600 font-bold">{minDuration}s</span>
+                  {t("minDuration")}: <span className="text-purple-600 font-bold">{minDuration}秒以上</span>
                 </label>
                 <input
                   type="range"
@@ -150,6 +150,10 @@ export default function UploadPage() {
                   onChange={(e) => setMinDuration(Number(e.target.value))}
                   className="w-full accent-purple-600"
                 />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>0.1秒〜</span>
+                  <span>〜3秒</span>
+                </div>
               </div>
             </div>
           )}

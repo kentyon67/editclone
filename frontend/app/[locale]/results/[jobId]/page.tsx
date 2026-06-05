@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Download, Copy, Check, FileVideo, Captions, BookOpen,
-  FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film
+  FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film, Share2
 } from "lucide-react";
 import Header from "@/components/Header";
 import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";
@@ -67,6 +67,32 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const locale = useLocale();
   const result = job.result!;
   const downloadUrl = getDownloadUrl(job.job_id);
+  const [sharing, setSharing] = useState(false);
+
+  async function handleSaveMp4() {
+    const mp4Url = getMp4Url(job.job_id);
+    setSharing(true);
+    try {
+      const res = await fetch(mp4Url);
+      const blob = await res.blob();
+      const file = new File([blob], "edited_video.mp4", { type: "video/mp4" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "編集済み動画" });
+      } else {
+        const a = document.createElement("a");
+        a.href = mp4Url;
+        a.download = "edited_video.mp4";
+        a.click();
+      }
+    } catch {
+      const a = document.createElement("a");
+      a.href = getMp4Url(job.job_id);
+      a.download = "edited_video.mp4";
+      a.click();
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <div>
@@ -78,11 +104,21 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         <p className="text-gray-500">{t("subtitle")}</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col gap-3 mb-6">
+        {result.has_mp4 && (
+          <button
+            onClick={handleSaveMp4}
+            disabled={sharing}
+            className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-green-200 disabled:opacity-60"
+          >
+            {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+            {t("saveMp4")}
+          </button>
+        )}
         <a
           href={downloadUrl}
           download
-          className="flex-1 flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-purple-200"
+          className="w-full flex items-center justify-center gap-3 py-3 bg-white border-2 border-purple-200 text-purple-700 font-bold rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-colors"
         >
           <Download className="w-5 h-5" />
           {t("downloadAll")}
@@ -91,9 +127,9 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
           <a
             href={getMp4Url(job.job_id)}
             download
-            className="flex-1 flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-green-200"
+            className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <Film className="w-5 h-5" />
+            <Download className="w-4 h-4" />
             {t("downloadMp4")}
           </a>
         )}

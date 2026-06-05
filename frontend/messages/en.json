@@ -9,21 +9,21 @@
     "logout": "Logout"
   },
   "hero": {
-    "badge": "AI Editing Assistant for Final Cut Pro",
+    "badge": "Multi-NLE AI Editing Agent",
     "title": "Your editing style,",
-    "titleAccent": "reproduced by AI",
-    "description": "Just upload your video. AI analyzes your editing style and auto-generates silence cuts, subtitles, and chapters. Export Final Cut Pro FCPXML in one click.",
+    "titleAccent": "learned and reproduced by AI",
+    "description": "Just upload your video. AI analyzes your editing style and auto-generates silence cuts, subtitles, chapters, and MP4. Export project files for FCP, Premiere, or DaVinci in one click.",
     "cta": "Try for Free",
     "ctaSub": "No credit card required",
     "demo": "Watch Demo"
   },
   "features": {
     "title": "What EditClone can do",
-    "subtitle": "AI automates tedious editing work so you can focus on creativity.",
+    "subtitle": "AI automates tedious editing work. The more you use it, the more it learns your style.",
     "items": {
       "silence": {
         "title": "Auto Silence Cutting",
-        "description": "Detects silences and pauses, reflects cut candidates in FCPXML automatically."
+        "description": "Detects silences and pauses, reflects cut candidates in FCPXML / Premiere XML automatically."
       },
       "transcript": {
         "title": "Whisper Transcription",
@@ -34,16 +34,16 @@
         "description": "Auto-generates chapters from speech content. Paste directly into YouTube descriptions."
       },
       "fcpxml": {
-        "title": "FCPXML Export",
-        "description": "Generate Final Cut Pro project files with one click. Start editing immediately."
+        "title": "Multi-NLE Export",
+        "description": "Generate project files for Final Cut Pro, Premiere Pro, and DaVinci Resolve with one click."
       },
-      "srt": {
-        "title": "Subtitle File (SRT)",
-        "description": "Generates SRT subtitle files compatible with YouTube, TikTok, and Instagram."
+      "mp4": {
+        "title": "Direct MP4 Output",
+        "description": "Export silence-cut MP4 directly. Ready for immediate upload to social media."
       },
       "async": {
-        "title": "Background Processing",
-        "description": "Long videos processed asynchronously. Close your browser after upload—processing continues."
+        "title": "Style Learning Loop",
+        "description": "Learns from your accept/reject feedback to automatically improve editing accuracy over time."
       }
     }
   },
@@ -58,54 +58,54 @@
       "analyze": {
         "step": "02",
         "title": "AI Analyzes Automatically",
-        "description": "Whisper transcribes, ffmpeg detects silence, AI generates chapters."
+        "description": "Whisper transcribes, ffmpeg detects silence, AI generates chapters and cut suggestions."
       },
       "download": {
         "step": "03",
-        "title": "Download as ZIP",
-        "description": "Get FCPXML, SRT, and chapter text bundled together. Ready for Final Cut Pro."
+        "title": "Download and Done",
+        "description": "Get FCPXML, MP4, SRT, and chapters bundled together. Ready to use immediately."
       }
     }
   },
   "pricing": {
     "title": "Pricing Plans",
-    "subtitle": "Start free. Upgrade anytime.",
+    "subtitle": "No watermarks — quantity limits only. Start free, upgrade anytime.",
     "monthly": "Monthly",
     "plans": {
       "free": {
         "name": "Free",
-        "price": "$0",
+        "price": "¥0",
         "period": "forever",
         "description": "Perfect for trying it out",
-        "features": ["3 videos/month", "All features included", "FCPXML export", "SRT subtitles", "YouTube chapters"],
+        "features": ["3 videos/month · up to 3 min", "Silence cut, subtitles, chapters", "FCPXML export", "SRT subtitles", "MP4 output"],
         "cta": "Get Started Free",
         "highlighted": false
       },
       "pro": {
         "name": "Pro",
-        "price": "$9",
+        "price": "¥980",
         "period": "month",
         "description": "For individual YouTubers",
-        "features": ["30 videos/month", "All features included", "Priority processing", "30-day history", "Email support"],
+        "features": ["30 videos/month · up to 15 min", "All features included", "MP4 output", "Priority processing", "Email support"],
         "cta": "Start Pro",
         "highlighted": true,
         "badge": "Popular"
       },
       "creator": {
         "name": "Creator",
-        "price": "$29",
+        "price": "¥2,980",
         "period": "month",
         "description": "For serious content creators",
-        "features": ["100 videos/month", "All features included", "Highest priority", "90-day history", "Priority support"],
+        "features": ["100 videos/month · up to 60 min", "All features included", "Plugin integration (FCP / Premiere)", "Project Sync", "Priority support"],
         "cta": "Start Creator",
         "highlighted": false
       },
       "studio": {
         "name": "Studio",
-        "price": "$99",
+        "price": "¥9,800",
         "period": "month",
         "description": "For teams and studios",
-        "features": ["Unlimited videos", "All features included", "Dedicated server", "API access", "Dedicated support"],
+        "features": ["Unlimited videos", "All features included", "Plugin integration (multi-NLE)", "Project Sync", "Dedicated support"],
         "cta": "Contact Us",
         "highlighted": false
       }
@@ -117,7 +117,7 @@
     "button": "Try for Free"
   },
   "footer": {
-    "tagline": "AI Editing Assistant for Final Cut Pro",
+    "tagline": "Multi-NLE AI Editing Agent",
     "links": {
       "product": "Product",
       "features": "Features",
@@ -173,34 +173,36 @@
     "uploading": "Uploading...",
     "processing": "Processing...",
     "analyzing": "AI is analyzing your video",
-    "settings": "Advanced Settings",
-    "noiseDb": "Silence Threshold (dB)",
-    "minDuration": "Minimum Silence Duration (s)",
+    "settings": "Cut Settings (defaults work great)",
+    "noiseDb": "Cut Sensitivity",
+    "noiseDbHint": "Sensitive (cut small pauses) ← → Lenient (cut long pauses only)",
+    "minDuration": "Min silence length to cut (seconds)",
     "submit": "Start Processing"
   },
   "results": {
-    "title": "Processing Complete",
+    "title": "Editing Complete",
     "subtitle": "Your files are ready to download",
-    "downloadAll": "FCPXML Package (ZIP)",
-    "downloadMp4": "Download Edited MP4",
+    "downloadAll": "Download Full Project (ZIP)",
+    "downloadMp4": "Download Finished Video (MP4)",
+    "saveMp4": "Save to Camera Roll",
     "fcpxml": {
-      "title": "FCPXML",
-      "description": "Project file for Final Cut Pro",
-      "note": "After extracting, relink media in the media/ folder"
+      "title": "Editing Project File (FCP / Premiere / DaVinci)",
+      "description": "Open in your editing app to make further adjustments",
+      "note": "After extracting, relink media in the media/ folder in your editing app"
     },
     "srt": {
-      "title": "SRT Subtitles",
-      "description": "Subtitle file for YouTube/TikTok"
+      "title": "Subtitle File",
+      "description": "Add captions to YouTube, TikTok, or Instagram"
     },
     "chapters": {
       "title": "YouTube Chapters",
-      "description": "Paste directly into your YouTube description",
+      "description": "Paste directly into your YouTube description to add chapters",
       "copy": "Copy",
       "copied": "Copied!"
     },
     "transcript": {
       "title": "Transcript",
-      "description": "Full text with timestamps"
+      "description": "Full text of everything said in the video"
     },
     "newVideo": "Process Another Video"
   },

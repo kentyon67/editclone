@@ -9,21 +9,21 @@
     "logout": "ログアウト"
   },
   "hero": {
-    "badge": "Final Cut Pro向けAI編集アシスタント",
+    "badge": "マルチ NLE 対応 AI 編集エージェント",
     "title": "あなたの編集スタイルを",
-    "titleAccent": "AIが再現する",
-    "description": "動画をアップロードするだけ。AIが編集スタイルを分析し、無音カット・字幕・チャプターを自動生成。Final Cut Pro用FCPXMLをワンクリックで出力します。",
+    "titleAccent": "AIが学習・再現する",
+    "description": "動画をアップロードするだけ。AIが編集スタイルを分析し、無音カット・字幕・チャプター・MP4を自動生成。FCP / Premiere / DaVinci 対応のプロジェクトファイルをワンクリックで出力します。",
     "cta": "無料で試す",
     "ctaSub": "クレジットカード不要",
     "demo": "デモを見る"
   },
   "features": {
     "title": "EditCloneでできること",
-    "subtitle": "面倒な編集作業をAIが自動化。あなたは創造的な作業に集中できます。",
+    "subtitle": "面倒な編集作業をAIが自動化。使えば使うほど、あなたのスタイルに合わせてパーソナライズされます。",
     "items": {
       "silence": {
         "title": "自動無音カット",
-        "description": "「えー」「あの」などの無音・沈黙を検出し、カット候補をFCPXMLに反映します。"
+        "description": "「えー」「あの」などの無音・沈黙を検出し、カット候補を FCPXML / Premiere XML に反映します。"
       },
       "transcript": {
         "title": "Whisper文字起こし",
@@ -34,16 +34,16 @@
         "description": "発話内容から動画のチャプターを自動生成。YouTube説明欄にそのまま貼れます。"
       },
       "fcpxml": {
-        "title": "FCPXML出力",
-        "description": "Final Cut Pro用のプロジェクトファイルをワンクリックで生成。すぐに編集を始められます。"
+        "title": "マルチNLE出力",
+        "description": "Final Cut Pro / Premiere Pro / DaVinci Resolve 用のプロジェクトファイルをワンクリックで生成します。"
       },
-      "srt": {
-        "title": "字幕ファイル (SRT)",
-        "description": "YouTube・TikTok・Instagramに対応したSRT形式の字幕ファイルを自動生成します。"
+      "mp4": {
+        "title": "MP4ダイレクト出力",
+        "description": "無音カット済みのMP4をそのまま書き出し。SNSへの直接投稿にも対応します。"
       },
       "async": {
-        "title": "バックグラウンド処理",
-        "description": "長い動画も非同期処理。アップロード後すぐにブラウザを閉じても処理を続けます。"
+        "title": "スタイル学習ループ",
+        "description": "採用・却下フィードバックを学習し、次回以降の編集精度を自動で向上させます。"
       }
     }
   },
@@ -58,18 +58,18 @@
       "analyze": {
         "step": "02",
         "title": "AIが自動分析",
-        "description": "Whisperが文字起こし、ffmpegが無音検出、AIがチャプターを生成します。"
+        "description": "Whisperが文字起こし、ffmpegが無音検出、AIがチャプターとカット提案を生成します。"
       },
       "download": {
         "step": "03",
-        "title": "ZIPでダウンロード",
-        "description": "FCPXML・SRT・チャプターテキストをまとめてダウンロード。Final Cut Proで即使用可能。"
+        "title": "ダウンロードして完成",
+        "description": "FCPXML・MP4・SRT・チャプターをまとめてダウンロード。即使用可能です。"
       }
     }
   },
   "pricing": {
     "title": "料金プラン",
-    "subtitle": "まずは無料で試してください。いつでもアップグレードできます。",
+    "subtitle": "透かしなし・量的制限のみ。まずは無料で試してください。",
     "monthly": "月払い",
     "plans": {
       "free": {
@@ -77,7 +77,7 @@
         "price": "¥0",
         "period": "ずっと無料",
         "description": "まず試してみたい方へ",
-        "features": ["月3本まで", "全機能利用可能", "FCPXML出力", "SRT字幕", "YouTubeチャプター"],
+        "features": ["月3本 / 最大3分", "無音カット・字幕・チャプター", "FCPXML出力", "SRT字幕", "MP4出力"],
         "cta": "無料で始める",
         "highlighted": false
       },
@@ -86,7 +86,7 @@
         "price": "¥980",
         "period": "月",
         "description": "個人YouTuberに最適",
-        "features": ["月30本まで", "全機能利用可能", "優先処理", "処理履歴30日保存", "メールサポート"],
+        "features": ["月30本 / 最大15分", "全機能利用可能", "MP4出力", "優先処理", "メールサポート"],
         "cta": "Proを始める",
         "highlighted": true,
         "badge": "人気"
@@ -96,7 +96,7 @@
         "price": "¥2,980",
         "period": "月",
         "description": "本格的なコンテンツ制作者へ",
-        "features": ["月100本まで", "全機能利用可能", "最優先処理", "処理履歴90日保存", "優先サポート"],
+        "features": ["月100本 / 最大60分", "全機能利用可能", "Plugin連携（FCP / Premiere）", "Project Sync", "優先サポート"],
         "cta": "Creatorを始める",
         "highlighted": false
       },
@@ -105,7 +105,7 @@
         "price": "¥9,800",
         "period": "月",
         "description": "チーム・企業向け",
-        "features": ["無制限", "全機能利用可能", "専用サーバー処理", "API アクセス", "専任サポート"],
+        "features": ["無制限", "全機能利用可能", "Plugin連携（複数NLE）", "Project Sync", "専任サポート"],
         "cta": "お問い合わせ",
         "highlighted": false
       }
@@ -117,7 +117,7 @@
     "button": "無料で試す"
   },
   "footer": {
-    "tagline": "Final Cut Pro向けAI編集アシスタント",
+    "tagline": "マルチ NLE 対応 AI 編集エージェント",
     "links": {
       "product": "プロダクト",
       "features": "機能",
@@ -173,34 +173,36 @@
     "uploading": "アップロード中...",
     "processing": "処理中...",
     "analyzing": "AIが分析しています",
-    "settings": "詳細設定",
-    "noiseDb": "無音検出感度 (dB)",
-    "minDuration": "最小無音時間 (秒)",
+    "settings": "カット設定（通常はそのままでOK）",
+    "noiseDb": "カット感度",
+    "noiseDbHint": "敏感（小さな無音もカット）← → 鈍感（大きな無音のみ）",
+    "minDuration": "何秒以上の無音をカットするか",
     "submit": "処理を開始"
   },
   "results": {
-    "title": "処理完了",
-    "subtitle": "以下のファイルをダウンロードできます",
-    "downloadAll": "FCPXMLパッケージ (ZIP)",
-    "downloadMp4": "編集済みMP4をダウンロード",
+    "title": "編集完了",
+    "subtitle": "ファイルをダウンロードできます",
+    "downloadAll": "編集プロジェクト一式をダウンロード（ZIP）",
+    "downloadMp4": "完成した動画をダウンロード（MP4）",
+    "saveMp4": "カメラロールに保存",
     "fcpxml": {
-      "title": "FCPXML",
-      "description": "Final Cut Proで開くプロジェクトファイル",
-      "note": "解凍後、media/フォルダの動画を再リンクしてください"
+      "title": "編集プロジェクトファイル（FCP / Premiere / DaVinci）",
+      "description": "編集ソフトで開いてさらに細かく調整できます",
+      "note": "ZIPを解凍後、media/フォルダの動画を編集ソフトで再リンクしてください"
     },
     "srt": {
-      "title": "SRT字幕",
-      "description": "YouTube/TikTok対応の字幕ファイル"
+      "title": "字幕ファイル",
+      "description": "YouTube・TikTok・Instagramに字幕として追加できます"
     },
     "chapters": {
       "title": "YouTubeチャプター",
-      "description": "YouTube説明欄にそのまま貼り付けできます",
+      "description": "YouTube説明欄にそのまま貼り付けるとチャプターが作れます",
       "copy": "コピー",
       "copied": "コピーしました"
     },
     "transcript": {
       "title": "文字起こし",
-      "description": "全セグメントのテキスト"
+      "description": "動画のセリフを全文テキスト化したものです"
     },
     "newVideo": "別の動画を処理する"
   },

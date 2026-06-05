@@ -73,14 +73,23 @@ def get_current_usage(user_id: str) -> int:
 
 
 def increment_usage(user_id: str) -> None:
+    """使用回数をインクリメント。失敗時は例外を raise する（呼び出し側でハンドリング）。"""
     if not USE_SUPABASE:
         return
     ym = _year_month()
     try:
-        # schema.sql の increment_usage 関数で atomic に upsert
         _client().rpc("increment_usage", {"p_user_id": user_id, "p_year_month": ym}).execute()
+        return
     except Exception:
         pass
+    # RPC が未登録の場合は直接 upsert にフォールバック
+    current = get_current_usage(user_id)
+    _client().table("usage_logs").upsert({
+        "user_id": user_id,
+        "year_month": ym,
+        "video_count": current + 1,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
 
 
 def check_and_increment(user_id: str, plan: str) -> int:

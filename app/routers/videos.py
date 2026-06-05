@@ -225,6 +225,11 @@ async def process_video(
                 "message": f"今月の処理上限に達しました（{e.current}/{e.limit}本）。アップグレードしてください。",
             },
         )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "USAGE_ERROR", "message": "使用回数の記録に失敗しました。もう一度お試しください。"},
+        )
 
     job = create_job(video_id, path, noise_db, min_duration)
     background_tasks.add_task(run_job, job.id)
