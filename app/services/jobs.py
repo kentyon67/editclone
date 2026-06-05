@@ -27,7 +27,7 @@ EditClone — 自動編集パッケージ
 このZIPには以下のファイルが含まれています：
 
 fcp/
-  {stem}.fcpxml       — Final Cut Pro 用プロジェクト
+  {stem}.fcpxml       — Final Cut Pro 用プロジェクト（字幕トラック付き）
                         File > Import > XML で開く
                         ※ media/ フォルダの動画を再リンクしてください
 
@@ -39,10 +39,13 @@ premiere/
 davinci/
   {stem}.edl          — DaVinci Resolve 用 EDL
                         File > Import Timeline > Import EDL で開く
+  ※ DaVinci Resolve 18以降では fcp/{stem}.fcpxml も直接インポート可能
+     File > Import Timeline > Import XML で開く（字幕トラック付き）
 
 subtitles/
   {stem}.srt          — 字幕ファイル (SRT)
                         YouTube / TikTok 等にアップロード可能
+                        ※ DaVinci / Premiere のキャプションとしても使用可
 
 media/
   {filename}          — 元動画（再リンク用）

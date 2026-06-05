@@ -117,9 +117,9 @@ def build_premiere_xml(
             ET.SubElement(f_el, "duration").text = str(total_frames)
             tc = ET.SubElement(f_el, "timecode")
             _rate_elem(tc, fps)
-            ET.SubElement(tc, "string").text = "00:00:00:00"
+            ET.SubElement(tc, "string").text = "00:00:00;00" if _is_ntsc(fps) else "00:00:00:00"
             ET.SubElement(tc, "frame").text = "0"
-            ET.SubElement(tc, "displayformat").text = "NDF"
+            ET.SubElement(tc, "displayformat").text = "DF" if _is_ntsc(fps) else "NDF"
             fm = ET.SubElement(f_el, "media")
             fv = ET.SubElement(fm, "video")
             fvsc = ET.SubElement(fv, "samplecharacteristics")

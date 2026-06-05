@@ -131,11 +131,12 @@ def build_fcpxml(
     library = ET.SubElement(root, "library")
     event = ET.SubElement(library, "event", {"name": "EditClone"})
     project_el = ET.SubElement(event, "project", {"name": video_path.stem})
+    tc_format = "DF" if abs(fps - 29.97) < 0.05 or abs(fps - 59.94) < 0.05 else "NDF"
     sequence = ET.SubElement(project_el, "sequence", {
         "duration": _t(timeline_dur),
         "format": fmt_id,
         "tcStart": "0s",
-        "tcFormat": "NDF",
+        "tcFormat": tc_format,
         "audioLayout": "stereo",
         "audioRate": "44100",
     })
