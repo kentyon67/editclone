@@ -182,17 +182,24 @@
   "results": {
     "title": "Editing Complete",
     "subtitle": "Your files are ready to download",
-    "downloadAll": "Download Full Project (ZIP)",
-    "downloadMp4": "Download Finished Video (MP4)",
+    "mp4SectionTitle": "Finished Video",
+    "mp4Description": "Silence-cut MP4 with captions burned in. Ready to upload to social media.",
+    "withTelopp": "With Captions",
     "saveMp4": "Save to Camera Roll",
+    "downloadMp4": "Download MP4",
+    "mp4ShareTitle": "Video edited by EditClone",
+    "editingSectionTitle": "Fine-tune in your editing app",
+    "editingDescription": "Open in FCP / Premiere / DaVinci to add BGM, custom caption styles, and color grading to the pre-cut timeline. Subtitle file (SRT) included.",
+    "downloadAll": "Download Full Project (ZIP)",
+    "editingNote": "ZIP includes: FCPXML, source video, subtitle file (SRT), and chapter text",
     "fcpxml": {
       "title": "Editing Project File (FCP / Premiere / DaVinci)",
       "description": "Open in your editing app to make further adjustments",
       "note": "After extracting, relink media in the media/ folder in your editing app"
     },
     "srt": {
-      "title": "Subtitle File",
-      "description": "Add captions to YouTube, TikTok, or Instagram"
+      "title": "Subtitle File (SRT)",
+      "description": "Add captions to YouTube, TikTok, or Instagram. Also importable as a caption track in your editing app."
     },
     "chapters": {
       "title": "YouTube Chapters",
@@ -207,14 +214,14 @@
     "newVideo": "Process Another Video"
   },
   "processing": {
-    "title": "Processing...",
-    "subtitle": "AI is analyzing your video",
+    "title": "Editing...",
+    "subtitle": "AI is analyzing and editing your video (may take a few minutes)",
     "steps": {
       "uploading": "Uploading",
-      "transcribing": "Transcribing",
+      "transcribing": "Transcribing speech",
       "detecting": "Detecting silence",
-      "generating": "Generating FCPXML",
-      "packaging": "Packaging files"
+      "generating": "Building editing project",
+      "packaging": "Burning in captions"
     }
   }
 }

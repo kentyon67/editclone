@@ -182,17 +182,24 @@
   "results": {
     "title": "編集完了",
     "subtitle": "ファイルをダウンロードできます",
-    "downloadAll": "編集プロジェクト一式をダウンロード（ZIP）",
-    "downloadMp4": "完成した動画をダウンロード（MP4）",
+    "mp4SectionTitle": "完成した動画",
+    "mp4Description": "無音カット＋テロップ焼き込み済みのMP4です。そのままSNSに投稿できます。",
+    "withTelopp": "テロップ入り",
     "saveMp4": "カメラロールに保存",
+    "downloadMp4": "MP4をダウンロード",
+    "mp4ShareTitle": "EditCloneで編集した動画",
+    "editingSectionTitle": "編集ソフトでさらに調整する",
+    "editingDescription": "FCP / Premiere / DaVinci で開くと、カット済みタイムラインに BGM・テロップスタイル・色調補正を追加できます。字幕ファイル（SRT）も同梱されています。",
+    "downloadAll": "編集プロジェクト一式をダウンロード（ZIP）",
+    "editingNote": "ZIP内: FCPXMLファイル・元動画・字幕ファイル（SRT）・チャプターテキスト",
     "fcpxml": {
       "title": "編集プロジェクトファイル（FCP / Premiere / DaVinci）",
       "description": "編集ソフトで開いてさらに細かく調整できます",
       "note": "ZIPを解凍後、media/フォルダの動画を編集ソフトで再リンクしてください"
     },
     "srt": {
-      "title": "字幕ファイル",
-      "description": "YouTube・TikTok・Instagramに字幕として追加できます"
+      "title": "字幕ファイル（SRT）",
+      "description": "YouTube・TikTok・Instagramに字幕として追加できます。編集ソフトのキャプションとしても使えます。"
     },
     "chapters": {
       "title": "YouTubeチャプター",
@@ -207,14 +214,14 @@
     "newVideo": "別の動画を処理する"
   },
   "processing": {
-    "title": "処理中...",
-    "subtitle": "AIが動画を分析しています",
+    "title": "編集中...",
+    "subtitle": "AIが動画を分析・編集しています（数分かかります）",
     "steps": {
       "uploading": "アップロード中",
-      "transcribing": "文字起こし中",
-      "detecting": "無音検出中",
-      "generating": "FCPXML生成中",
-      "packaging": "ファイルをまとめています"
+      "transcribing": "セリフを文字起こし中",
+      "detecting": "無音箇所を検出中",
+      "generating": "編集プロジェクトを生成中",
+      "packaging": "テロップを焼き込んでいます"
     }
   }
 }

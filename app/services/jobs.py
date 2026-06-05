@@ -9,8 +9,8 @@ from app.services.analytics import log_event
 from app.services.chapters import format_youtube_description, generate_chapters
 from app.services.cut_suggestion import suggest_cuts
 from app.services.fcpxml import build_fcpxml
-from app.services.mp4_render import render_mp4
-from app.services.srt import generate_srt
+from app.services.mp4_render import add_subtitles_to_mp4, render_mp4
+from app.services.srt import remap_segments_for_cuts, segments_to_srt
 from app.services.transcription import transcribe_video
 from app.services.video_info import extract_video_info
 
@@ -63,6 +63,7 @@ def run_job(job_id: str) -> None:
 
         job.progress = "動画情報を取得中..."
         info = extract_video_info(path)
+        total_duration = info.get("duration_seconds") or 0.0
 
         job.progress = "文字起こし中..."
         transcript = transcribe_video(path)
@@ -74,19 +75,46 @@ def run_job(job_id: str) -> None:
         chapters = generate_chapters(path)
         youtube_desc = format_youtube_description(chapters)
 
+        # SRT生成: transcribe結果を再利用（二重実行を防ぐ）
         job.progress = "字幕ファイル生成中..."
-        srt_content = generate_srt(path)
+        srt_content = segments_to_srt(transcript["segments"])  # 元動画タイムスタンプ（編集ソフト用）
 
         job.progress = "FCPXMLを生成中..."
         xml_content = build_fcpxml(path, noise_db=job.noise_db, min_duration=job.min_duration)
 
         job.progress = "MP4をレンダリング中..."
         mp4_bytes: bytes | None = None
+        has_subtitles = False
+
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
-                mp4_path = Path(tmpdir) / f"{job.video_id}.mp4"
-                if render_mp4(path, cuts, mp4_path) and mp4_path.exists():
-                    mp4_bytes = mp4_path.read_bytes()
+                tmpdir_path = Path(tmpdir)
+
+                # Step1: 無音カット済みMP4を生成
+                cut_mp4_path = tmpdir_path / f"{job.video_id}_cut.mp4"
+                cut_ok = render_mp4(path, cuts, cut_mp4_path) and cut_mp4_path.exists()
+
+                if cut_ok:
+                    # Step2: カット後の動画に合わせてSRTタイムスタンプを再計算
+                    remapped_segs = remap_segments_for_cuts(
+                        transcript["segments"], cuts, total_duration
+                    )
+                    srt_for_mp4 = segments_to_srt(remapped_segs)
+
+                    # Step3: テロップ焼き込み（失敗時は無字幕MPにフォールバック）
+                    if srt_for_mp4.strip():
+                        sub_mp4_path = tmpdir_path / f"{job.video_id}_sub.mp4"
+                        sub_ok = (
+                            add_subtitles_to_mp4(cut_mp4_path, srt_for_mp4, sub_mp4_path)
+                            and sub_mp4_path.exists()
+                        )
+                        if sub_ok:
+                            mp4_bytes = sub_mp4_path.read_bytes()
+                            has_subtitles = True
+                        else:
+                            mp4_bytes = cut_mp4_path.read_bytes()
+                    else:
+                        mp4_bytes = cut_mp4_path.read_bytes()
         except Exception:
             pass
 
@@ -110,12 +138,14 @@ def run_job(job_id: str) -> None:
             "srt": srt_content,
             "zip_bytes": zip_bytes,
             "mp4_bytes": mp4_bytes,
+            "has_subtitles": has_subtitles,
         }
         job.status = JobStatus.completed
         job.completed_at = datetime.utcnow().isoformat()
         log_event("process_complete", video_id=job.video_id, job_id=job.id,
                   metadata={"cut_count": len(cuts), "has_mp4": mp4_bytes is not None,
-                            "duration_seconds": info.get("duration_seconds")})
+                            "has_subtitles": has_subtitles,
+                            "duration_seconds": total_duration})
 
     except Exception as exc:
         job.status = JobStatus.failed

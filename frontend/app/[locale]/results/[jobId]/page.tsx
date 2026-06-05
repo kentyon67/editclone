@@ -4,7 +4,8 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Download, Copy, Check, FileVideo, Captions, BookOpen,
-  FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film, Share2
+  FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
+  Share2, Scissors, Clapperboard
 } from "lucide-react";
 import Header from "@/components/Header";
 import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";
@@ -75,19 +76,19 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
     try {
       const res = await fetch(mp4Url);
       const blob = await res.blob();
-      const file = new File([blob], "edited_video.mp4", { type: "video/mp4" });
+      const file = new File([blob], "editclone_video.mp4", { type: "video/mp4" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "編集済み動画" });
+        await navigator.share({ files: [file], title: t("mp4ShareTitle") });
       } else {
         const a = document.createElement("a");
         a.href = mp4Url;
-        a.download = "edited_video.mp4";
+        a.download = "editclone_video.mp4";
         a.click();
       }
     } catch {
       const a = document.createElement("a");
       a.href = getMp4Url(job.job_id);
-      a.download = "edited_video.mp4";
+      a.download = "editclone_video.mp4";
       a.click();
     } finally {
       setSharing(false);
@@ -104,8 +105,19 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         <p className="text-gray-500">{t("subtitle")}</p>
       </div>
 
-      <div className="flex flex-col gap-3 mb-6">
-        {result.has_mp4 && (
+      {/* Primary: Save finished video */}
+      {result.has_mp4 && (
+        <div className="mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Film className="w-5 h-5 text-green-600" />
+            <span className="font-bold text-green-900">{t("mp4SectionTitle")}</span>
+            {result.has_subtitles && (
+              <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-medium">
+                {t("withTelopp")}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-green-700 mb-4">{t("mp4Description")}</p>
           <button
             onClick={handleSaveMp4}
             disabled={sharing}
@@ -114,45 +126,37 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
             {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
             {t("saveMp4")}
           </button>
-        )}
-        <a
-          href={downloadUrl}
-          download
-          className="w-full flex items-center justify-center gap-3 py-3 bg-white border-2 border-purple-200 text-purple-700 font-bold rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-colors"
-        >
-          <Download className="w-5 h-5" />
-          {t("downloadAll")}
-        </a>
-        {result.has_mp4 && (
           <a
             href={getMp4Url(job.job_id)}
             download
-            className="w-full flex items-center justify-center gap-2 py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+            className="mt-2 w-full flex items-center justify-center gap-2 py-2 text-sm text-green-600 hover:text-green-800 transition-colors"
           >
             <Download className="w-4 h-4" />
             {t("downloadMp4")}
           </a>
-        )}
+        </div>
+      )}
+
+      {/* Secondary: Editing project ZIP */}
+      <div className="mb-6 bg-white border border-purple-100 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Clapperboard className="w-5 h-5 text-purple-600" />
+          <span className="font-bold text-gray-900">{t("editingSectionTitle")}</span>
+        </div>
+        <p className="text-sm text-gray-500 mb-4">{t("editingDescription")}</p>
+        <a
+          href={downloadUrl}
+          download
+          className="w-full flex items-center justify-center gap-3 py-3 border-2 border-purple-300 text-purple-700 font-bold rounded-xl hover:bg-purple-50 hover:border-purple-400 transition-colors"
+        >
+          <Download className="w-5 h-5" />
+          {t("downloadAll")}
+        </a>
+        <p className="mt-2 text-xs text-gray-400 text-center">{t("editingNote")}</p>
       </div>
 
+      {/* Info cards */}
       <div className="space-y-4">
-        <div className="bg-white rounded-2xl p-5 border border-purple-100">
-          <div className="flex items-center gap-3 mb-2">
-            <FileVideo className="w-5 h-5 text-purple-500" />
-            <h3 className="font-bold text-gray-900">{t("fcpxml.title")}</h3>
-          </div>
-          <p className="text-sm text-gray-500 mb-1">{t("fcpxml.description")}</p>
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2">{t("fcpxml.note")}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 border border-purple-100">
-          <div className="flex items-center gap-3 mb-2">
-            <Captions className="w-5 h-5 text-blue-500" />
-            <h3 className="font-bold text-gray-900">{t("srt.title")}</h3>
-          </div>
-          <p className="text-sm text-gray-500">{t("srt.description")}</p>
-        </div>
-
         {result.youtube_description && (
           <div className="bg-white rounded-2xl p-5 border border-purple-100">
             <div className="flex items-center justify-between mb-3">
@@ -179,6 +183,16 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
             <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 max-h-48 overflow-auto leading-relaxed">
               {result.transcript.transcript}
             </div>
+          </div>
+        )}
+
+        {result.srt && (
+          <div className="bg-white rounded-2xl p-5 border border-purple-100">
+            <div className="flex items-center gap-3 mb-2">
+              <Captions className="w-5 h-5 text-blue-500" />
+              <h3 className="font-bold text-gray-900">{t("srt.title")}</h3>
+            </div>
+            <p className="text-sm text-gray-500">{t("srt.description")}</p>
           </div>
         )}
       </div>

@@ -60,6 +60,64 @@ def _invert_cuts(cuts: list[dict], total_duration: float) -> list[tuple[float, f
     return [(s, e) for s, e in keep if e - s > 0.05]
 
 
+def add_subtitles_to_mp4(
+    input_mp4: Path,
+    srt_content: str,
+    output_path: Path,
+) -> bool:
+    """
+    MP4 に SRT 字幕（テロップ）を焼き込む。
+    失敗した場合は False を返す（呼び出し側で無字幕 MP4 にフォールバックすること）。
+    """
+    if not srt_content.strip():
+        return False
+
+    ff = _ffmpeg()
+    import os
+    import tempfile
+
+    srt_fd, srt_path = tempfile.mkstemp(suffix=".srt", dir=output_path.parent)
+    try:
+        with os.fdopen(srt_fd, "w", encoding="utf-8") as f:
+            f.write(srt_content)
+
+        # Linux パスはコロンなし。Windows 開発環境では失敗することがあるが Railway は問題なし。
+        srt_escaped = str(srt_path).replace("\\", "/")
+        # Windows のドライブレター（C:）があればコロンをエスケープ
+        if len(srt_escaped) > 2 and srt_escaped[1] == ":":
+            srt_escaped = srt_escaped[0] + "\\:" + srt_escaped[2:]
+
+        style = (
+            "FontSize=26,"
+            "PrimaryColour=&H00FFFFFF,"
+            "OutlineColour=&H00000000,"
+            "BorderStyle=1,"
+            "Outline=3,"
+            "Shadow=0,"
+            "MarginV=50,"
+            "Bold=1"
+        )
+
+        cmd = [
+            ff, "-y", "-i", str(input_mp4),
+            "-vf", f"subtitles='{srt_escaped}':force_style='{style}'",
+            "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+            "-c:a", "copy",
+            str(output_path),
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=600)
+            return result.returncode == 0
+        except subprocess.TimeoutExpired:
+            return False
+    finally:
+        try:
+            Path(srt_path).unlink()
+        except Exception:
+            pass
+
+
 def render_mp4(video_path: Path, cuts: list[dict], output_path: Path) -> bool:
     """
     silence cuts を除いた MP4 を output_path に生成する。

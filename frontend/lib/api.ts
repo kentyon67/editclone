@@ -134,6 +134,7 @@ export interface JobStatusResponse {
     youtube_description: string;
     srt: string;
     has_mp4: boolean;
+    has_subtitles: boolean;
   };
 }
 

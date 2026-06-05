@@ -35,6 +35,7 @@ def job_status(job_id: str):
             "youtube_description": result["youtube_description"],
             "srt": result["srt"],
             "has_mp4": result.get("mp4_bytes") is not None,
+            "has_subtitles": result.get("has_subtitles", False),
         }
 
     return resp

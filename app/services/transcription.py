@@ -3,9 +3,9 @@ from pathlib import Path
 
 from faster_whisper import WhisperModel
 
-WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "base")
+# "small" は base より大幅に精度が高く、CPU でも実用的な速度で動く
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
 
-# モデルは初回呼び出し時に1度だけロードしてキャッシュする
 _model: WhisperModel | None = None
 
 
@@ -16,26 +16,87 @@ def _get_model() -> WhisperModel:
     return _model
 
 
+def merge_segments(
+    segments: list[dict],
+    max_chars: int = 40,
+    max_duration: float = 5.0,
+    min_gap: float = 0.6,
+) -> list[dict]:
+    """
+    短いWhisperセグメントを自然な字幕単位にマージする。
+    max_chars: 1ブロックの最大文字数（日本語40字、英語は長め）
+    min_gap: この秒数以上の無音があれば必ず分割
+    """
+    sentence_enders = set("。！？.!?")
+    merged: list[dict] = []
+    cur: dict | None = None
+
+    for seg in segments:
+        text = seg["text"].strip()
+        if not text:
+            continue
+
+        if cur is None:
+            cur = {"start": seg["start"], "end": seg["end"], "text": text}
+            continue
+
+        gap = seg["start"] - cur["end"]
+        combined = cur["text"] + text
+        duration = seg["end"] - cur["start"]
+        ends_sentence = cur["text"][-1] in sentence_enders if cur["text"] else False
+
+        should_merge = (
+            gap < min_gap
+            and len(combined) <= max_chars
+            and duration <= max_duration
+            and not ends_sentence
+        )
+
+        if should_merge:
+            cur["text"] = combined
+            cur["end"] = seg["end"]
+        else:
+            merged.append(cur)
+            cur = {"start": seg["start"], "end": seg["end"], "text": text}
+
+    if cur:
+        merged.append(cur)
+
+    return merged
+
+
 def transcribe_video(video_path: Path) -> dict:
     model = _get_model()
-    segments_iter, info = model.transcribe(str(video_path), beam_size=5)
+    segments_iter, info = model.transcribe(
+        str(video_path),
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+        condition_on_previous_text=True,
+        no_speech_threshold=0.6,
+    )
 
-    segments = []
-    full_text_parts = []
+    raw_segments: list[dict] = []
+    full_text_parts: list[str] = []
+
     for seg in segments_iter:
-        segments.append(
-            {
-                "start": round(seg.start, 3),
-                "end": round(seg.end, 3),
-                "text": seg.text.strip(),
-            }
-        )
+        text = seg.text.strip()
+        if not text:
+            continue
+        raw_segments.append({
+            "start": round(seg.start, 3),
+            "end": round(seg.end, 3),
+            "text": text,
+        })
         full_text_parts.append(seg.text)
+
+    merged_segments = merge_segments(raw_segments)
 
     return {
         "language": info.language,
         "language_probability": round(info.language_probability, 3),
         "duration_seconds": round(info.duration, 3),
         "transcript": "".join(full_text_parts).strip(),
-        "segments": segments,
+        "segments": merged_segments,
+        "raw_segments": raw_segments,
     }
