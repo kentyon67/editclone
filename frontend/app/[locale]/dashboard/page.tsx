@@ -8,9 +8,11 @@ import Footer from "@/components/Footer";
 import { getUserUsage, getUserJobs, type UsageResponse, type UserJob } from "@/lib/api";
 import { setPluginMode, type PluginNLE } from "@/lib/plugin";
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(locale === "ja" ? "ja-JP" : "en-US", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  });
 }
 
 function StatusBadge({ status }: { status: UserJob["status"] }) {
@@ -161,7 +163,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className="flex items-center gap-1 text-xs text-gray-400">
                           <Clock className="w-3 h-3" />
-                          {formatDate(job.created_at)}
+                          {formatDate(job.created_at, locale)}
                         </span>
                         {job.cut_count !== null && (
                           <span className="text-xs text-gray-400">カット {job.cut_count} 箇所</span>

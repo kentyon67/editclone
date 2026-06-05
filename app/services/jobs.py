@@ -261,6 +261,18 @@ def _reconstruct_job_from_db(data: dict) -> Job:
     return job
 
 
+def _update_status_supabase(job_id: str, status: str) -> None:
+    """DB のジョブステータスのみ更新する（処理開始時・失敗時の即時反映用）。"""
+    from app.services.storage import USE_CLOUD
+    if not USE_CLOUD:
+        return
+    try:
+        from app.services.storage import _client
+        _client().table("jobs").update({"status": status}).eq("id", job_id).execute()
+    except Exception as e:
+        logger.warning("Supabase status update failed: %s", e)
+
+
 def _load_job_from_supabase(job_id: str) -> Job | None:
     from app.services.storage import USE_CLOUD
     if not USE_CLOUD:
@@ -288,6 +300,7 @@ def run_job(job_id: str) -> None:
         return
 
     job.status = JobStatus.processing
+    _update_status_supabase(job.id, "processing")
     try:
         path = job.video_path
 

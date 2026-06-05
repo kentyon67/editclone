@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard, MonitorPlay
+  Share2, Clapperboard, MonitorPlay, Scissors
 } from "lucide-react";
 import Header from "@/components/Header";
 import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse } from "@/lib/api";
@@ -14,9 +14,30 @@ import {
 } from "@/lib/plugin";
 import { createClient } from "@/lib/supabase";
 
+// バックエンドの progress 文字列からステップインデックスを判定する
+function getProgressStepIndex(progress: string): number {
+  if (progress.includes("文字起こし") || progress.includes("transcrib")) return 1;
+  if (progress.includes("無音") || progress.includes("AI") || progress.includes("silence")) return 2;
+  if (
+    progress.includes("チャプター") ||
+    progress.includes("字幕") ||
+    progress.includes("FCPXML") ||
+    progress.includes("Premiere") ||
+    progress.includes("EDL")
+  ) return 3;
+  if (
+    progress.includes("MP4") ||
+    progress.includes("まとめ") ||
+    progress.includes("完了") ||
+    progress.includes("テロップ")
+  ) return 4;
+  return 0;
+}
+
 function ProcessingView({ progress }: { progress: string }) {
   const t = useTranslations("processing");
   const steps = ["uploading", "transcribing", "detecting", "generating", "packaging"] as const;
+  const activeIndex = getProgressStepIndex(progress);
 
   return (
     <div className="text-center py-16">
@@ -27,13 +48,26 @@ function ProcessingView({ progress }: { progress: string }) {
       <p className="text-gray-500 mb-10">{t("subtitle")}</p>
 
       <div className="max-w-sm mx-auto space-y-3">
-        {steps.map((step) => {
-          const label = t(`steps.${step}`);
-          const active = progress.includes(label.slice(0, 4));
+        {steps.map((step, i) => {
+          const done = i < activeIndex;
+          const active = i === activeIndex;
           return (
-            <div key={step} className={`flex items-center gap-3 p-3 rounded-xl ${active ? "bg-purple-50 border border-purple-200" : "opacity-40"}`}>
-              <div className={`w-2 h-2 rounded-full ${active ? "bg-purple-500 animate-pulse" : "bg-gray-300"}`} />
-              <span className="text-sm text-gray-700">{label}</span>
+            <div
+              key={step}
+              className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+                active
+                  ? "bg-purple-50 border border-purple-200"
+                  : done
+                  ? "opacity-60"
+                  : "opacity-30"
+              }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  active ? "bg-purple-500 animate-pulse" : done ? "bg-emerald-400" : "bg-gray-300"
+                }`}
+              />
+              <span className="text-sm text-gray-700">{t(`steps.${step}`)}</span>
             </div>
           );
         })}
@@ -189,6 +223,35 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         </a>
         <p className="mt-2 text-xs text-gray-400 text-center">{t("editingNote")}</p>
       </div>
+
+      {/* Cut summary */}
+      {result.cuts && result.cuts.length > 0 && (
+        <div className="mb-4 bg-white border border-gray-100 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Scissors className="w-4 h-4 text-purple-500" />
+              <span className="font-bold text-gray-900 text-sm">
+                カット箇所 ({result.cuts.length}件)
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {result.cuts.map((cut: { cut_start: number; cut_end: number; duration: number; reason: string; source?: string }, i: number) => (
+              <div key={i} className="flex items-center gap-3 text-xs py-1.5 px-2 rounded-lg hover:bg-gray-50">
+                <span className="text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
+                <span className="font-mono text-gray-600 flex-shrink-0">
+                  {cut.cut_start.toFixed(1)}s – {cut.cut_end.toFixed(1)}s
+                </span>
+                <span className="text-gray-400 flex-shrink-0">({cut.duration.toFixed(1)}s)</span>
+                <span className="text-gray-500 truncate">{cut.reason}</span>
+                {cut.source === "ai" || cut.source === "ai+silence" ? (
+                  <span className="text-purple-500 font-medium flex-shrink-0">AI</span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Info cards */}
       <div className="space-y-4">
