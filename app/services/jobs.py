@@ -124,9 +124,8 @@ def list_user_jobs(user_id: str) -> list[Job]:
                 _client().table("jobs")
                 .select("*")
                 .eq("user_id", user_id)
-                .in_("status", ["completed", "failed"])
                 .order("created_at", desc=True)
-                .limit(20)
+                .limit(30)
                 .execute()
             )
             jobs: list[Job] = []
@@ -138,7 +137,11 @@ def list_user_jobs(user_id: str) -> list[Job]:
         except Exception as e:
             logger.warning("Supabase list_user_jobs failed: %s", e)
 
-    return [j for j in _jobs.values() if j.user_id == user_id and j.status == JobStatus.completed]
+    return sorted(
+        [j for j in _jobs.values() if j.user_id == user_id],
+        key=lambda j: j.created_at,
+        reverse=True,
+    )
 
 
 # ---------------------------------------------------------------------------
