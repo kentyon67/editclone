@@ -5,10 +5,13 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard
+  Share2, Clapperboard, MonitorPlay
 } from "lucide-react";
 import Header from "@/components/Header";
 import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";
+import {
+  getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
+} from "@/lib/plugin";
 
 function ProcessingView({ progress }: { progress: string }) {
   const t = useTranslations("processing");
@@ -69,6 +72,11 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const result = job.result!;
   const downloadUrl = getDownloadUrl(job.job_id);
   const [sharing, setSharing] = useState(false);
+  const [pluginNLE, setPluginNLE] = useState<PluginNLE>(null);
+
+  useEffect(() => {
+    setPluginNLE(getPluginMode());
+  }, []);
 
   async function handleSaveMp4() {
     const mp4Url = getMp4Url(job.job_id);
@@ -134,6 +142,30 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
             <Download className="w-4 h-4" />
             {t("downloadMp4")}
           </a>
+        </div>
+      )}
+
+      {/* Plugin NLE Import Button */}
+      {pluginNLE && (
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              const filename = `${job.job_id}_editclone.zip`;
+              if (pluginNLE === "fcp") {
+                if (!importToFCP(downloadUrl, filename)) {
+                  window.open(downloadUrl);
+                }
+              } else if (pluginNLE === "premiere") {
+                importToPremiere(downloadUrl, filename);
+              } else {
+                importToDaVinci(downloadUrl);
+              }
+            }}
+            className={`w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r ${NLE_LABELS[pluginNLE].color} text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg`}
+          >
+            <MonitorPlay className="w-5 h-5" />
+            {NLE_LABELS[pluginNLE].importLabel}
+          </button>
         </div>
       )}
 

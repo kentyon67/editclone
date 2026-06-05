@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- FCP Workflow Extension に必要 -->
+    <key>com.apple.developer.workflow-extension-api</key>
+    <true/>
+    <!-- ネットワークアクセス（EditClone API + Vercel） -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- ファイル保存ダイアログ -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+    <array>
+        <string>/tmp/</string>
+    </array>
+</dict>
+</plist>

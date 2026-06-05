@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EditClone</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div id="header">
+    <span id="header-logo">🎬 EditClone</span>
+    <span id="header-nle">for Premiere Pro</span>
+  </div>
+
+  <!-- メインコンテンツ: EditClone Web アプリを iframe で表示 -->
+  <iframe
+    id="app-frame"
+    src="about:blank"
+    allow="clipboard-write"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+  ></iframe>
+
+  <!-- インポートバナー: iframe の postMessage を受信したときに表示 -->
+  <div id="import-banner" class="hidden">
+    <p id="import-message">ZIPファイルをダウンロード中...</p>
+    <button id="import-btn" onclick="triggerImport()">Premiere Pro にインポート</button>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

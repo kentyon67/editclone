@@ -6,6 +6,7 @@ import { Upload, Film, ChevronRight, Loader2 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getUserUsage, type UsageResponse } from "@/lib/api";
+import { setPluginMode, type PluginNLE } from "@/lib/plugin";
 
 export default function DashboardPage() {
   const t = useTranslations("dashboard");
@@ -15,6 +16,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // プラグインモードを URL パラメータから読み込んで sessionStorage に保存する
+    const params = new URLSearchParams(window.location.search);
+    const plugin = params.get("plugin") as PluginNLE;
+    if (plugin && ["fcp", "premiere", "davinci"].includes(plugin)) {
+      setPluginMode(plugin);
+    }
+
     getUserUsage()
       .then(setUsage)
       .catch(() => setUsage({ plan: "free", used: 0, limit: 3, remaining: 3, max_duration_seconds: 180 }))

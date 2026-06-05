@@ -1,0 +1,89 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #1a1a2e;
+  color: #e8e8f0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  height: 38px;
+}
+
+#header-logo {
+  font-weight: 700;
+  font-size: 14px;
+  color: #e8e8f0;
+}
+
+#header-nle {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  background: rgba(155,90,215,0.3);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+#app-frame {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #fff;
+}
+
+#import-banner {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #6d28d9, #4f46e5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#import-banner.hidden {
+  display: none;
+}
+
+#import-message {
+  font-size: 13px;
+  color: rgba(255,255,255,0.9);
+  flex: 1;
+}
+
+#import-btn {
+  background: #fff;
+  color: #6d28d9;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#import-btn:hover {
+  background: #f3e8ff;
+}
+
+#import-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

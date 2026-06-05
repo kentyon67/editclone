@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="8.0" ExtensionBundleId="com.editclone.premiere" ExtensionBundleVersion="1.0.0" ExtensionBundleName="EditClone">
+  <Author>EditClone</Author>
+  <Contact mailto="support@editclone.app"/>
+  <Legal>
+    <License>https://editclone.app/terms</License>
+  </Legal>
+  <Abstract>AI 動画編集エージェント。無音カット・テロップ自動生成・FCPXML を Premiere に直接インポート。</Abstract>
+
+  <ExtensionList>
+    <Extension Id="com.editclone.premiere.panel" Version="1.0.0"/>
+  </ExtensionList>
+
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- Premiere Pro CC 2019 (13.0) 以降 -->
+      <Host Name="PPRO" Version="[13.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="8.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+
+  <DispatchInfoList>
+    <Extension Id="com.editclone.premiere.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./host/host.jsx</ScriptPath>
+          <CEFCommandLine>
+            <!-- sessionStorage / localStorage を使えるようにする -->
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>EditClone</Menu>
+          <Geometry>
+            <Size>
+              <Height>700</Height>
+              <Width>400</Width>
+            </Size>
+            <MinSize>
+              <Height>400</Height>
+              <Width>320</Width>
+            </MinSize>
+          </Geometry>
+          <Icons>
+            <Icon Type="Normal">icons/icon_normal.png</Icon>
+            <Icon Type="RollOver">icons/icon_hover.png</Icon>
+          </Icons>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>
