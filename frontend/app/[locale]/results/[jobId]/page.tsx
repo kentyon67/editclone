@@ -5,11 +5,11 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard, MonitorPlay, Scissors
+  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse, postFeedback } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -116,6 +116,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [sharing, setSharing] = useState(false);
   const [pluginNLE, setPluginNLE] = useState<PluginNLE>(null);
   const [sessionToken, setSessionToken] = useState<string>("");
+  const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -300,7 +301,45 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         )}
       </div>
 
-      <div className="mt-8 text-center">
+      {/* フィードバック */}
+      <div className="mt-8 bg-white border border-gray-100 rounded-2xl p-5">
+        {feedbackSent ? (
+          <div className="flex items-center justify-center gap-2 text-emerald-600 font-medium text-sm py-1">
+            <CheckCircle className="w-4 h-4" />
+            {t("feedback.done")}
+          </div>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-gray-700 text-center mb-3">{t("feedback.title")}</p>
+            <div className="flex gap-3 justify-center">
+              {(["accept", "partial", "reject"] as const).map((action) => {
+                const Icon = action === "accept" ? ThumbsUp : action === "partial" ? Minus : ThumbsDown;
+                const label = t(`feedback.${action}`);
+                const colors = {
+                  accept: "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+                  partial: "border-gray-200 text-gray-600 hover:bg-gray-50",
+                  reject: "border-red-200 text-red-600 hover:bg-red-50",
+                };
+                return (
+                  <button
+                    key={action}
+                    onClick={async () => {
+                      await postFeedback({ job_id: job.job_id, action }).catch(() => {});
+                      setFeedbackSent(action);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition-colors ${colors[action]}`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="mt-6 text-center">
         <Link
           href={`/${locale}/upload`}
           className="inline-flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium"

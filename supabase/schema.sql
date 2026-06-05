@@ -1,4 +1,4 @@
--- EditClone Supabase Schema v3
+-- EditClone Supabase Schema v4
 -- Supabase SQL Editor で実行してください
 -- 何度実行しても安全（IF NOT EXISTS / DO ブロック対応済み）
 
@@ -60,6 +60,59 @@ alter table public.jobs add column if not exists result_mp4_path text;
 alter table public.jobs add column if not exists result_metadata jsonb;
 
 alter table public.jobs enable row level security;
+
+-- =====================
+-- style_profiles（編集スタイルプロファイル） Phase 2
+-- =====================
+create table if not exists public.style_profiles (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  name text not null,
+  description text default '',
+  -- カット設定
+  noise_db float default -30.0,
+  min_silence_seconds float default 0.5,
+  -- AI プロンプトテンプレート
+  default_prompt text default '',
+  -- メタデータ
+  is_active boolean default false,
+  job_count int default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.style_profiles enable row level security;
+
+-- =====================
+-- reference_videos（参考動画 URL 登録 — oEmbed のみ） Phase 2
+-- =====================
+create table if not exists public.reference_videos (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  style_profile_id uuid references public.style_profiles(id) on delete cascade,
+  url text not null,
+  oembed_title text,
+  oembed_thumbnail_url text,
+  oembed_provider text,
+  created_at timestamptz default now()
+);
+
+alter table public.reference_videos enable row level security;
+
+-- =====================
+-- feedback_logs（カット採用 / 却下ログ） Phase 2
+-- =====================
+create table if not exists public.feedback_logs (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  job_id text not null,
+  style_profile_id uuid references public.style_profiles(id) on delete set null,
+  action text not null check (action in ('accept', 'reject', 'partial')),
+  notes text default '',
+  created_at timestamptz default now()
+);
+
+alter table public.feedback_logs enable row level security;
 
 -- =====================
 -- analytics_events（行動ログ）
@@ -125,6 +178,15 @@ begin
   drop policy if exists "Users can view own jobs" on public.jobs;
   drop policy if exists "Users can insert own jobs" on public.jobs;
   drop policy if exists "Users can update own jobs" on public.jobs;
+
+  -- style_profiles
+  drop policy if exists "Users can manage own style profiles" on public.style_profiles;
+
+  -- reference_videos
+  drop policy if exists "Users can manage own reference videos" on public.reference_videos;
+
+  -- feedback_logs
+  drop policy if exists "Users can manage own feedback" on public.feedback_logs;
 end;
 $$;
 
@@ -151,6 +213,21 @@ create policy "Users can insert own jobs"
 create policy "Users can update own jobs"
   on public.jobs for update
   using (auth.uid() = user_id);
+
+create policy "Users can manage own style profiles"
+  on public.style_profiles for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can manage own reference videos"
+  on public.reference_videos for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can manage own feedback"
+  on public.feedback_logs for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- =====================
 -- Storage バケット

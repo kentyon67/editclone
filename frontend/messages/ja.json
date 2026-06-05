@@ -5,6 +5,7 @@
     "login": "ログイン",
     "signup": "無料で始める",
     "dashboard": "ダッシュボード",
+    "styles": "スタイル",
     "account": "アカウント",
     "logout": "ログアウト"
   },
@@ -242,7 +243,47 @@
     },
     "newVideo": "別の動画を処理する",
     "cutSummaryTitle": "カット箇所",
-    "cutUnit": "件"
+    "cutUnit": "件",
+    "feedback": {
+      "title": "この編集結果はどうでしたか？",
+      "accept": "満足",
+      "partial": "まあまあ",
+      "reject": "やり直したい",
+      "done": "フィードバックを送信しました"
+    }
+  },
+  "styles": {
+    "title": "スタイルプロファイル",
+    "subtitle": "編集スタイルを保存して、次回から自動的に適用できます",
+    "new": "新規プロファイル",
+    "empty": "まだプロファイルがありません",
+    "emptySub": "「新規プロファイル」から作成してください",
+    "active": "適用中",
+    "activate": "適用する",
+    "edit": "編集",
+    "delete": "削除",
+    "deleteConfirm": "このプロファイルを削除しますか？",
+    "jobCount": "{count}本処理済み",
+    "form": {
+      "name": "プロファイル名",
+      "namePlaceholder": "例: YouTube日常vlog",
+      "description": "メモ（任意）",
+      "descriptionPlaceholder": "このスタイルの特徴など",
+      "noiseDb": "無音カット感度",
+      "minSilence": "カットする最低無音時間",
+      "defaultPrompt": "デフォルトAI指示",
+      "defaultPromptPlaceholder": "例: 冒頭の挨拶をカット、言い淀みを全部削除",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "create": "作成"
+    },
+    "feedback": {
+      "title": "この編集結果はどうでしたか？",
+      "accept": "満足",
+      "partial": "まあまあ",
+      "reject": "やり直したい",
+      "done": "フィードバックを送信しました"
+    }
   },
   "processing": {
     "title": "編集中...",

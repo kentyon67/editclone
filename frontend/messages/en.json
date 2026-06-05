@@ -5,6 +5,7 @@
     "login": "Login",
     "signup": "Get Started Free",
     "dashboard": "Dashboard",
+    "styles": "Styles",
     "account": "Account",
     "logout": "Logout"
   },
@@ -242,7 +243,47 @@
     },
     "newVideo": "Process Another Video",
     "cutSummaryTitle": "Cut Points",
-    "cutUnit": "cuts"
+    "cutUnit": "cuts",
+    "feedback": {
+      "title": "How was this edit?",
+      "accept": "Great",
+      "partial": "OK",
+      "reject": "Needs work",
+      "done": "Feedback sent"
+    }
+  },
+  "styles": {
+    "title": "Style Profiles",
+    "subtitle": "Save your editing style and apply it automatically next time",
+    "new": "New Profile",
+    "empty": "No profiles yet",
+    "emptySub": "Create one with the \"New Profile\" button",
+    "active": "Active",
+    "activate": "Apply",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this profile?",
+    "jobCount": "{count} videos processed",
+    "form": {
+      "name": "Profile name",
+      "namePlaceholder": "e.g. YouTube daily vlog",
+      "description": "Notes (optional)",
+      "descriptionPlaceholder": "Describe this style...",
+      "noiseDb": "Silence cut sensitivity",
+      "minSilence": "Minimum silence to cut",
+      "defaultPrompt": "Default AI instructions",
+      "defaultPromptPlaceholder": "e.g. Cut the intro greeting, remove all filler words",
+      "save": "Save",
+      "cancel": "Cancel",
+      "create": "Create"
+    },
+    "feedback": {
+      "title": "How was this edit?",
+      "accept": "Great",
+      "partial": "OK",
+      "reject": "Needs work",
+      "done": "Feedback sent"
+    }
   },
   "processing": {
     "title": "Editing...",

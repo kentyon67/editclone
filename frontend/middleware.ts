@@ -5,7 +5,7 @@ import { routing } from "./i18n/routing";
 
 const intlMiddleware = createIntlMiddleware(routing);
 
-const PROTECTED = ["/dashboard", "/upload", "/results", "/account"];
+const PROTECTED = ["/dashboard", "/upload", "/results", "/account", "/styles"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

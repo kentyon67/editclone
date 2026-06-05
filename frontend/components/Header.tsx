@@ -43,6 +43,9 @@ export default function Header({ isLoggedIn = false }: { isLoggedIn?: boolean })
               <Link href={`/${locale}/dashboard`} className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
                 {t("dashboard")}
               </Link>
+              <Link href={`/${locale}/styles`} className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
+                {t("styles")}
+              </Link>
               <Link href={`/${locale}/account`} className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
                 {t("account")}
               </Link>

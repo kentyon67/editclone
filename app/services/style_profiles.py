@@ -1,0 +1,155 @@
+"""
+Style Profile CRUD — ユーザーの編集スタイルを保存・管理する。
+"""
+import logging
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+
+def _client():
+    from app.services.storage import _client as storage_client
+    return storage_client()
+
+
+# ---------------------------------------------------------------------------
+# Profile CRUD
+# ---------------------------------------------------------------------------
+
+def list_profiles(user_id: str) -> list[dict]:
+    try:
+        resp = (
+            _client().table("style_profiles")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        logger.warning("list_profiles failed: %s", e)
+        return []
+
+
+def get_profile(profile_id: str, user_id: str) -> Optional[dict]:
+    try:
+        resp = (
+            _client().table("style_profiles")
+            .select("*")
+            .eq("id", profile_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("get_profile failed: %s", e)
+        return None
+
+
+def get_active_profile(user_id: str) -> Optional[dict]:
+    try:
+        resp = (
+            _client().table("style_profiles")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("get_active_profile failed: %s", e)
+        return None
+
+
+def create_profile(user_id: str, data: dict) -> Optional[dict]:
+    try:
+        payload = {
+            "user_id": user_id,
+            "name": data["name"],
+            "description": data.get("description", ""),
+            "noise_db": float(data.get("noise_db", -30.0)),
+            "min_silence_seconds": float(data.get("min_silence_seconds", 0.5)),
+            "default_prompt": data.get("default_prompt", ""),
+            "is_active": False,
+        }
+        resp = _client().table("style_profiles").insert(payload).execute()
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("create_profile failed: %s", e)
+        return None
+
+
+def update_profile(profile_id: str, user_id: str, data: dict) -> Optional[dict]:
+    allowed = {"name", "description", "noise_db", "min_silence_seconds", "default_prompt"}
+    payload = {k: v for k, v in data.items() if k in allowed}
+    if not payload:
+        return get_profile(profile_id, user_id)
+    try:
+        import datetime
+        payload["updated_at"] = datetime.datetime.utcnow().isoformat()
+        resp = (
+            _client().table("style_profiles")
+            .update(payload)
+            .eq("id", profile_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("update_profile failed: %s", e)
+        return None
+
+
+def delete_profile(profile_id: str, user_id: str) -> bool:
+    try:
+        _client().table("style_profiles").delete().eq("id", profile_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.warning("delete_profile failed: %s", e)
+        return False
+
+
+def set_active_profile(profile_id: str, user_id: str) -> bool:
+    """指定プロファイルをアクティブにし、他を非アクティブにする。"""
+    try:
+        import datetime
+        now = datetime.datetime.utcnow().isoformat()
+        # 全て非アクティブ
+        _client().table("style_profiles").update({"is_active": False, "updated_at": now}).eq("user_id", user_id).execute()
+        # 指定プロファイルをアクティブ
+        _client().table("style_profiles").update({"is_active": True, "updated_at": now}).eq("id", profile_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.warning("set_active_profile failed: %s", e)
+        return False
+
+
+def increment_job_count(profile_id: str) -> None:
+    try:
+        resp = _client().table("style_profiles").select("job_count").eq("id", profile_id).limit(1).execute()
+        if resp.data:
+            current = resp.data[0].get("job_count", 0) or 0
+            _client().table("style_profiles").update({"job_count": current + 1}).eq("id", profile_id).execute()
+    except Exception as e:
+        logger.warning("increment_job_count failed: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Feedback
+# ---------------------------------------------------------------------------
+
+def record_feedback(user_id: str, job_id: str, action: str, style_profile_id: Optional[str] = None, notes: str = "") -> bool:
+    try:
+        _client().table("feedback_logs").insert({
+            "user_id": user_id,
+            "job_id": job_id,
+            "action": action,
+            "style_profile_id": style_profile_id,
+            "notes": notes,
+        }).execute()
+        return True
+    except Exception as e:
+        logger.warning("record_feedback failed: %s", e)
+        return False

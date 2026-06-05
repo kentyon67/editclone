@@ -1,18 +1,20 @@
 "use client";
 import { useTranslations, useLocale } from "next-intl";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles } from "lucide-react";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { uploadVideo, startProcessing, ApiError } from "@/lib/api";
+import { uploadVideo, startProcessing, getActiveStyleProfile, ApiError, type StyleProfile } from "@/lib/api";
 
 export default function UploadPage() {
   const t = useTranslations("upload");
   const locale = useLocale();
   const router = useRouter();
 
+  const [activeProfile, setActiveProfile] = useState<StyleProfile | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -24,6 +26,17 @@ export default function UploadPage() {
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getActiveStyleProfile().then(({ profile }) => {
+      if (profile) {
+        setActiveProfile(profile);
+        setNoiseDb(profile.noise_db);
+        setMinDuration(profile.min_silence_seconds);
+        if (profile.default_prompt) setPrompt(profile.default_prompt);
+      }
+    }).catch(() => {});
+  }, []);
 
   function readVideoDuration(f: File) {
     const video = document.createElement("video");
@@ -86,7 +99,18 @@ export default function UploadPage() {
       <Header isLoggedIn />
 
       <main className="pt-24 pb-16 px-4 max-w-2xl mx-auto">
-        <h1 className="text-3xl font-black text-gray-900 mb-8">{t("title")}</h1>
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <h1 className="text-3xl font-black text-gray-900">{t("title")}</h1>
+          {activeProfile && (
+            <Link
+              href={`/${locale}/styles`}
+              className="flex items-center gap-1.5 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1.5 rounded-full font-medium hover:bg-purple-100 transition-colors flex-shrink-0"
+            >
+              <Sparkles className="w-3 h-3" />
+              {activeProfile.name}
+            </Link>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div

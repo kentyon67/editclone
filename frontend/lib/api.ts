@@ -173,6 +173,92 @@ export interface Chapter {
   title: string;
 }
 
+export interface StyleProfile {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  noise_db: number;
+  min_silence_seconds: number;
+  default_prompt: string;
+  is_active: boolean;
+  job_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listStyleProfiles(): Promise<{ profiles: StyleProfile[] }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles`, { headers });
+  if (!res.ok) return handleError(res, "Style profiles fetch failed");
+  return res.json();
+}
+
+export async function getActiveStyleProfile(): Promise<{ profile: StyleProfile | null }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/active`, { headers });
+  if (!res.ok) return { profile: null };
+  return res.json();
+}
+
+export async function createStyleProfile(data: {
+  name: string;
+  description?: string;
+  noise_db?: number;
+  min_silence_seconds?: number;
+  default_prompt?: string;
+}): Promise<StyleProfile> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) return handleError(res, "Create style profile failed");
+  return res.json();
+}
+
+export async function updateStyleProfile(
+  id: string,
+  data: Partial<{ name: string; description: string; noise_db: number; min_silence_seconds: number; default_prompt: string }>
+): Promise<StyleProfile> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) return handleError(res, "Update style profile failed");
+  return res.json();
+}
+
+export async function deleteStyleProfile(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${id}`, { method: "DELETE", headers });
+  if (!res.ok) return handleError(res, "Delete style profile failed");
+}
+
+export async function activateStyleProfile(id: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${id}/activate`, { method: "POST", headers });
+  if (!res.ok) return handleError(res, "Activate style profile failed");
+}
+
+export async function postFeedback(data: {
+  job_id: string;
+  action: "accept" | "reject" | "partial";
+  style_profile_id?: string;
+  notes?: string;
+}): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) return handleError(res, "Feedback post failed");
+}
+
 export interface UserJob {
   job_id: string;
   video_filename: string;
