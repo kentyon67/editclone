@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EditClone</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Login Screen -->
+    <div id="screen-login" class="screen">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+          <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+          <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+          <line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/>
+          <line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/>
+          <line x1="17" y1="17" x2="22" y2="17"/>
+        </svg>
+        <span>EditClone</span>
+      </div>
+      <p class="subtitle">AI 動画編集エージェント</p>
+      <div class="form-group">
+        <label>メールアドレス</label>
+        <input id="input-email" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>パスワード</label>
+        <input id="input-password" type="password" placeholder="••••••••" />
+      </div>
+      <div id="login-error" class="error hidden"></div>
+      <button id="btn-login" class="btn btn-primary">ログイン</button>
+      <p class="hint">アカウントをお持ちでない方は<br/><a href="#" id="link-signup">editclone.vercel.app</a> で登録</p>
+    </div>
+
+    <!-- Job List Screen -->
+    <div id="screen-jobs" class="screen hidden">
+      <div class="header">
+        <div class="logo small">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+            <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+          </svg>
+          <span>EditClone</span>
+        </div>
+        <button id="btn-logout" class="btn btn-ghost">ログアウト</button>
+      </div>
+      <p class="user-email" id="user-email"></p>
+
+      <div id="jobs-loading" class="loading">読み込み中...</div>
+      <div id="jobs-empty" class="empty hidden">
+        <p>完了済みの動画がありません。</p>
+        <p><a href="#" id="link-open-web">ウェブで動画を処理する →</a></p>
+      </div>
+      <div id="jobs-list" class="hidden"></div>
+
+      <button id="btn-refresh" class="btn btn-ghost small">更新</button>
+    </div>
+
+    <!-- Importing Screen -->
+    <div id="screen-importing" class="screen hidden">
+      <div class="spinner"></div>
+      <p>Premiere Pro にインポート中...</p>
+      <p class="hint" id="import-status"></p>
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

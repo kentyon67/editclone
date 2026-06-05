@@ -1,0 +1,31 @@
+{
+  "id": "com.editclone.premiere-panel",
+  "name": "EditClone",
+  "version": "1.0.0",
+  "manifestVersion": 7,
+  "host": [
+    {
+      "app": "PPro",
+      "minVersion": "24.0"
+    }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "main",
+      "label": { "default": "EditClone" },
+      "main": "src/index.html",
+      "minSize": { "width": 320, "height": 480 },
+      "preferredDockedSize": { "width": 360, "height": 640 }
+    }
+  ],
+  "requiredPermissions": {
+    "localFileSystem": "fullAccess",
+    "network": {
+      "domains": ["https://editclone.vercel.app", "https://editclone-production.up.railway.app"]
+    },
+    "ipc": {
+      "enablePluginCommunication": true
+    }
+  }
+}

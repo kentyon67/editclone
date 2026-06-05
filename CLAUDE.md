@@ -41,9 +41,10 @@
 | フロントエンド認証保護ルート | ✅ | `frontend/middleware.ts` |
 | Railway バックエンドデプロイ | ✅ | `railway.json` |
 | Vercel フロントエンドデプロイ | ✅ | `frontend/vercel.json` |
-| MP4 出力（ffmpeg.wasm + Modal） | 🔄 | Phase 1 実装対象 |
-| 利用回数制限（プランごと） | 🔄 | Phase 1 実装対象 |
-| Analytics 基盤 | 🔄 | Phase 1 実装対象 |
+| MP4 出力（ffmpeg サーバーサイド） | ✅ | `app/services/mp4_render.py` |
+| 利用回数制限（プランごと） | ✅ | `app/services/usage.py` |
+| Analytics 基盤（Supabase ログ） | ✅ | `app/services/analytics.py` |
+| フロントエンド i18n（マルチ NLE 対応コピー） | ✅ | `frontend/messages/` |
 | 本番環境変数設定（Secret） | 🔄 | ユーザー手動設定待ち |
 | Supabase schema.sql 実行 | 🔄 | ユーザー手動設定待ち |
 

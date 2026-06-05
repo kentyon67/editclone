@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.routers import billing, jobs, usage, videos
+from app.routers import billing, jobs, plugin, usage, videos
 
 app = FastAPI(title="EditClone", version="0.3.0")
 
@@ -22,8 +22,9 @@ app.include_router(videos.router)
 app.include_router(jobs.router)
 app.include_router(billing.router)
 app.include_router(usage.router)
+app.include_router(plugin.router)
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.2.0"}
+    return {"status": "ok", "version": "0.3.0"}

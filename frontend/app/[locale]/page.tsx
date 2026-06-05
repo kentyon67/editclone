@@ -1,8 +1,8 @@
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import {
-  Scissors, FileText, BookOpen, Download, Captions, Zap,
-  ArrowRight, CheckCircle, Play
+  Scissors, FileText, BookOpen, Film, Captions, Zap,
+  ArrowRight, CheckCircle,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -57,7 +57,7 @@ function Hero() {
         </div>
 
         <div className="mt-20 flex items-center justify-center gap-12 text-white/60 text-sm flex-wrap">
-          {["FCPXML", "SRT字幕", "YouTubeチャプター", "バックグラウンド処理"].map((label) => (
+          {["FCPXML", "MP4出力", "SRT字幕", "YouTubeチャプター", "FCP / Premiere / DaVinci"].map((label) => (
             <div key={label} className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-cyan-400" />
               {label}
@@ -71,8 +71,8 @@ function Hero() {
 
 function Features() {
   const t = useTranslations("features");
-  const icons = [Scissors, FileText, BookOpen, Download, Captions, Zap];
-  const keys = ["silence", "transcript", "chapters", "fcpxml", "srt", "async"] as const;
+  const icons = [Scissors, FileText, BookOpen, Film, Captions, Zap];
+  const keys = ["silence", "transcript", "chapters", "fcpxml", "mp4", "async"] as const;
 
   return (
     <section id="features" className="py-24 px-4 bg-white">

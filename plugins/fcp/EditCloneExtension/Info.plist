@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).EditCloneExtension</string>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.professional-video-applications.workflow-extension</string>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>WorkflowExtensionSupportsMultipleInstances</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>CFBundleIdentifier</key>
+	<string>com.editclone.fcp-extension</string>
+	<key>CFBundleName</key>
+	<string>EditClone</string>
+	<key>CFBundleDisplayName</key>
+	<string>EditClone</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 EditClone</string>
+</dict>
+</plist>
