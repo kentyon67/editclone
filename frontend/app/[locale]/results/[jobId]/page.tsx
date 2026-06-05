@@ -3,9 +3,9 @@ import { useTranslations, useLocale } from "next-intl";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Download, Copy, Check, FileVideo, Captions, BookOpen,
+  Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Scissors, Clapperboard
+  Share2, Clapperboard
 } from "lucide-react";
 import Header from "@/components/Header";
 import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";

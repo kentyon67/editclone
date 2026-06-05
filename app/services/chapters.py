@@ -13,9 +13,8 @@ def _fmt(seconds: float) -> str:
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def generate_chapters(video_path: Path) -> list[dict]:
-    result = transcribe_video(video_path)
-    segments = result["segments"]
+def generate_chapters_from_segments(segments: list[dict]) -> list[dict]:
+    """既に計算済みのセグメントからチャプターを生成する（transcribe再実行なし）。"""
     if not segments:
         return [{"start_seconds": 0.0, "start_formatted": "0:00", "title": "Start"}]
 
@@ -46,6 +45,12 @@ def generate_chapters(video_path: Path) -> list[dict]:
                 buf = []
 
     return chapters
+
+
+def generate_chapters(video_path: Path) -> list[dict]:
+    """動画ファイルパスからチャプターを生成する（スタンドアロン用）。"""
+    result = transcribe_video(video_path)
+    return generate_chapters_from_segments(result["segments"])
 
 
 def format_youtube_description(chapters: list[dict]) -> str:

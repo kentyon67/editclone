@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 
 from app.services.analytics import log_event
-from app.services.chapters import format_youtube_description, generate_chapters
+from app.services.chapters import format_youtube_description, generate_chapters_from_segments
 from app.services.cut_suggestion import suggest_cuts
 from app.services.fcpxml import build_fcpxml
 from app.services.mp4_render import add_subtitles_to_mp4, render_mp4
@@ -71,16 +71,16 @@ def run_job(job_id: str) -> None:
         job.progress = "無音検出中..."
         cuts = suggest_cuts(path, noise_db=job.noise_db, min_duration=job.min_duration)
 
+        # チャプター・SRT・FCPXML はすべて既存結果を再利用（transcribe/silence再実行なし）
         job.progress = "チャプター生成中..."
-        chapters = generate_chapters(path)
+        chapters = generate_chapters_from_segments(transcript["segments"])
         youtube_desc = format_youtube_description(chapters)
 
-        # SRT生成: transcribe結果を再利用（二重実行を防ぐ）
         job.progress = "字幕ファイル生成中..."
         srt_content = segments_to_srt(transcript["segments"])  # 元動画タイムスタンプ（編集ソフト用）
 
         job.progress = "FCPXMLを生成中..."
-        xml_content = build_fcpxml(path, noise_db=job.noise_db, min_duration=job.min_duration)
+        xml_content = build_fcpxml(path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts)
 
         job.progress = "MP4をレンダリング中..."
         mp4_bytes: bytes | None = None

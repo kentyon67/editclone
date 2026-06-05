@@ -33,6 +33,7 @@ def build_fcpxml(
     video_path: Path,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    cuts: list[dict] | None = None,
 ) -> str:
     info = extract_video_info(video_path)
     total_sec = info["duration_seconds"] or 0.0
@@ -41,7 +42,8 @@ def build_fcpxml(
     fps = info["fps"] or 30.0
     fps_int = int(round(fps))
 
-    cuts = suggest_cuts(video_path, noise_db=noise_db, min_duration=min_duration)
+    if cuts is None:
+        cuts = suggest_cuts(video_path, noise_db=noise_db, min_duration=min_duration)
     kept = _kept_segments(cuts, total_sec)
     timeline_dur = sum(e - s for s, e in kept)
 
