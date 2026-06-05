@@ -299,6 +299,7 @@
     "refineApply": "適用する",
     "refineDismiss": "キャンセル",
     "refineNoFeedback": "フィードバックや参考動画を追加すると精度が上がります",
+    "refineHasFeedback": "{count}件のフィードバックを参照します",
     "form": {
       "name": "プロファイル名",
       "namePlaceholder": "例: YouTube日常vlog",

@@ -299,6 +299,7 @@
     "refineApply": "Apply",
     "refineDismiss": "Dismiss",
     "refineNoFeedback": "Add feedback or reference videos to improve accuracy",
+    "refineHasFeedback": "Using {count} feedback(s) for refinement",
     "form": {
       "name": "Profile name",
       "namePlaceholder": "e.g. YouTube daily vlog",

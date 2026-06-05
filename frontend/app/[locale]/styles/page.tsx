@@ -12,9 +12,9 @@ import {
   listStyleProfiles, createStyleProfile, updateStyleProfile,
   deleteStyleProfile, activateStyleProfile,
   listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
-  aiRefineProfile,
+  aiRefineProfile, getProfileStats,
   ApiError,
-  type StyleProfile, type ReferenceVideo,
+  type StyleProfile, type ReferenceVideo, type ProfileStats,
 } from "@/lib/api";
 
 type FormData = {
@@ -279,6 +279,11 @@ function AiRefineSection({
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [applying, setApplying] = useState(false);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+
+  useEffect(() => {
+    getProfileStats(profile.id).then(setStats).catch(() => {});
+  }, [profile.id]);
 
   async function handleRefine() {
     setRefining(true);
@@ -346,7 +351,11 @@ function AiRefineSection({
           </button>
           {error && <p className="text-xs text-red-500 text-center">{error}</p>}
           {!error && !refining && (
-            <p className="text-xs text-gray-300 text-center">{t("refineNoFeedback")}</p>
+            <p className="text-xs text-gray-400 text-center">
+              {stats && stats.total > 0
+                ? t("refineHasFeedback", { count: stats.total })
+                : t("refineNoFeedback")}
+            </p>
           )}
         </div>
       )}

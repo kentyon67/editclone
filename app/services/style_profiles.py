@@ -140,6 +140,28 @@ def increment_job_count(profile_id: str) -> None:
 # Feedback
 # ---------------------------------------------------------------------------
 
+def get_profile_stats(profile_id: str, user_id: str) -> dict:
+    """プロファイルのフィードバック統計を返す。"""
+    try:
+        resp = (
+            _client().table("feedback_logs")
+            .select("action")
+            .eq("user_id", user_id)
+            .eq("style_profile_id", profile_id)
+            .execute()
+        )
+        rows = resp.data or []
+        counts: dict[str, int] = {"accept": 0, "partial": 0, "reject": 0}
+        for row in rows:
+            a = row.get("action", "")
+            if a in counts:
+                counts[a] += 1
+        return {"total": len(rows), **counts}
+    except Exception as e:
+        logger.warning("get_profile_stats failed: %s", e)
+        return {"total": 0, "accept": 0, "partial": 0, "reject": 0}
+
+
 def record_feedback(user_id: str, job_id: str, action: str, style_profile_id: Optional[str] = None, notes: str = "") -> bool:
     try:
         _client().table("feedback_logs").insert({

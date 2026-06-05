@@ -308,6 +308,20 @@ export async function deleteReferenceVideo(profileId: string, videoId: string): 
   if (!res.ok) return handleError(res, "Delete reference video failed");
 }
 
+export interface ProfileStats {
+  total: number;
+  accept: number;
+  partial: number;
+  reject: number;
+}
+
+export async function getProfileStats(profileId: string): Promise<ProfileStats> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/stats`, { headers });
+  if (!res.ok) return { total: 0, accept: 0, partial: 0, reject: 0 };
+  return res.json();
+}
+
 export async function aiRefineProfile(profileId: string): Promise<{ suggested_prompt: string }> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/style-profiles/${profileId}/ai-refine`, {

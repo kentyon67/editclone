@@ -78,6 +78,12 @@ def delete_profile(profile_id: str, user: dict = Depends(require_user)):
     return {"deleted": True}
 
 
+@router.get("/{profile_id}/stats")
+def profile_stats(profile_id: str, user: dict = Depends(require_user)):
+    """フィードバック統計（accept/partial/reject 件数）を返す。"""
+    return svc.get_profile_stats(profile_id, user["id"])
+
+
 @router.post("/{profile_id}/activate")
 def activate_profile(profile_id: str, user: dict = Depends(require_user)):
     ok = svc.set_active_profile(profile_id, user["id"])
