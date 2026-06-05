@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
@@ -49,11 +49,12 @@ export async function uploadVideo(file: File): Promise<{ video_id: string; filen
 
 export async function startProcessing(
   videoId: string,
-  options: { noise_db?: number; min_duration?: number } = {}
+  options: { noise_db?: number; min_duration?: number; prompt?: string } = {}
 ): Promise<{ job_id: string; video_id: string; status: string }> {
   const params = new URLSearchParams();
   if (options.noise_db !== undefined) params.set("noise_db", String(options.noise_db));
   if (options.min_duration !== undefined) params.set("min_duration", String(options.min_duration));
+  if (options.prompt) params.set("prompt", options.prompt);
 
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/videos/process/${videoId}?${params}`, {
@@ -62,6 +63,14 @@ export async function startProcessing(
   });
   if (!res.ok) return handleError(res, "Processing start failed");
   return res.json();
+}
+
+export function getPremiereXmlUrl(jobId: string): string {
+  return `${API_URL}/plugin/jobs/${jobId}/premiere-xml`;
+}
+
+export function getFcpxmlUrl(jobId: string): string {
+  return `${API_URL}/plugin/jobs/${jobId}/fcpxml`;
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {

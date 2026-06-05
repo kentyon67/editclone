@@ -3,7 +3,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight } from "lucide-react";
+import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles } from "lucide-react";
 import Header from "@/components/Header";
 import { uploadVideo, startProcessing, ApiError } from "@/lib/api";
 
@@ -14,6 +14,7 @@ export default function UploadPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [noiseDb, setNoiseDb] = useState(-30);
   const [minDuration, setMinDuration] = useState(0.5);
   const [showSettings, setShowSettings] = useState(false);
@@ -43,6 +44,7 @@ export default function UploadPage() {
       const job = await startProcessing(uploaded.video_id, {
         noise_db: noiseDb,
         min_duration: minDuration,
+        prompt: prompt.trim() || undefined,
       });
 
       router.push(`/${locale}/results/${job.job_id}`);
@@ -105,6 +107,26 @@ export default function UploadPage() {
               className="hidden"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
+          </div>
+
+          {/* AI editing prompt */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="w-4 h-4 text-purple-500" />
+              <label className="text-sm font-semibold text-purple-900">
+                {t("promptLabel")}
+              </label>
+              <span className="text-xs text-purple-400 font-normal">{t("promptOptional")}</span>
+            </div>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder={t("promptPlaceholder")}
+              rows={3}
+              maxLength={500}
+              className="w-full px-3 py-2 text-sm bg-white border border-purple-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-purple-400 placeholder-gray-300 text-gray-700"
+            />
+            <p className="mt-1 text-xs text-purple-400">{t("promptHint")}</p>
           </div>
 
           <button

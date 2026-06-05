@@ -5,6 +5,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
+from app.services.ai_edit import analyze_transcript_for_cuts, merge_cuts
 from app.services.analytics import log_event
 from app.services.chapters import format_youtube_description, generate_chapters_from_segments
 from app.services.cut_suggestion import suggest_cuts
@@ -65,6 +66,7 @@ class Job:
         noise_db: float,
         min_duration: float,
         user_id: str = "",
+        prompt: str = "",
     ):
         self.id: str = ""
         self.video_id = video_id
@@ -72,6 +74,7 @@ class Job:
         self.noise_db = noise_db
         self.min_duration = min_duration
         self.user_id = user_id
+        self.prompt = prompt
         self.status = JobStatus.pending
         self.progress: str = ""
         self.result: dict | None = None
@@ -89,9 +92,10 @@ def create_job(
     noise_db: float,
     min_duration: float,
     user_id: str = "",
+    prompt: str = "",
 ) -> Job:
     import uuid
-    job = Job(video_id, video_path, noise_db, min_duration, user_id)
+    job = Job(video_id, video_path, noise_db, min_duration, user_id, prompt)
     job.id = str(uuid.uuid4())
     _jobs[job.id] = job
     return job
@@ -128,7 +132,17 @@ def run_job(job_id: str) -> None:
         transcript = transcribe_video(path)
 
         job.progress = "無音箇所を検出中..."
-        cuts = suggest_cuts(path, noise_db=job.noise_db, min_duration=job.min_duration)
+        silence_cuts = suggest_cuts(path, noise_db=job.noise_db, min_duration=job.min_duration)
+
+        # プロンプトがあれば Claude API でセマンティックカット提案を追加
+        if job.prompt:
+            job.progress = "AIが編集指示を解析中..."
+            ai_cuts = analyze_transcript_for_cuts(
+                transcript["segments"], job.prompt, transcript["transcript"]
+            )
+            cuts = merge_cuts(silence_cuts, ai_cuts)
+        else:
+            cuts = silence_cuts
 
         # 以降はすべて transcribe / silence 結果を再利用（再実行なし）
         job.progress = "チャプター生成中..."
@@ -226,6 +240,8 @@ def run_job(job_id: str) -> None:
                 "has_mp4": mp4_bytes is not None,
                 "has_subtitles": has_subtitles,
                 "duration_seconds": total_duration,
+                "has_prompt": bool(job.prompt),
+                "ai_cuts": sum(1 for c in cuts if c.get("source") in ("ai", "ai+silence")),
             },
         )
 

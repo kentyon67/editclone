@@ -37,15 +37,24 @@ export const NLE_LABELS: Record<NonNullable<PluginNLE>, { name: string; importLa
 };
 
 /**
- * FCP Extension: WKWebView から Swift へ FCPXML インポートを依頼する
+ * FCP Extension: WKWebView から Swift へ FCPXML インポートを依頼する。
+ * jobId + token + apiBase を渡して Swift 側で直接ダウンロードさせる。
  */
-export function importToFCP(downloadUrl: string, filename: string) {
-  const wk = (window as unknown as { webkit?: { messageHandlers?: { editclone?: { postMessage: (m: unknown) => void } } } }).webkit;
+export function importToFCP(jobId: string, token: string, apiBase: string): boolean {
+  const wk = (window as unknown as {
+    webkit?: {
+      messageHandlers?: {
+        editclone?: { postMessage: (m: unknown) => void }
+      }
+    }
+  }).webkit;
+
   if (wk?.messageHandlers?.editclone) {
     wk.messageHandlers.editclone.postMessage({
       action: "importFCPXML",
-      url: downloadUrl,
-      filename,
+      jobId,
+      token,
+      apiBase,
     });
     return true;
   }
@@ -53,18 +62,19 @@ export function importToFCP(downloadUrl: string, filename: string) {
 }
 
 /**
- * Premiere CEP: iframe postMessage で CEP パネルに FCPXML インポートを依頼する
+ * Premiere CEP: iframe postMessage で CEP パネルに XMEML インポートを依頼する。
+ * jobId + token + apiBase を渡して CEP 側で直接 XML ダウンロード → Premiere にインポート。
  */
-export function importToPremiere(downloadUrl: string, filename: string) {
+export function importToPremiere(jobId: string, token: string, apiBase: string) {
   window.parent.postMessage(
-    { action: "importFCPXML", url: downloadUrl, filename },
+    { action: "importPremiereXML", jobId, token, apiBase },
     "*"
   );
 }
 
 /**
- * DaVinci: ZIP ダウンロード URL をクリップボードにコピーして通知する
- * (DaVinci Script 側が API をポーリングするため、URLは不要。ZIPを開くだけでよい)
+ * DaVinci: EDL は DaVinci スクリプトが API から取得するため、
+ * Web からは ZIP 全体をダウンロードして手動補助として提供する。
  */
 export function importToDaVinci(downloadUrl: string) {
   const a = document.createElement("a");

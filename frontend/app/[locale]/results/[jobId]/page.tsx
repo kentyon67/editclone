@@ -8,10 +8,11 @@ import {
   Share2, Clapperboard, MonitorPlay
 } from "lucide-react";
 import Header from "@/components/Header";
-import { getJobStatus, getDownloadUrl, getMp4Url, JobStatusResponse } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, API_URL, JobStatusResponse } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
+import { createClient } from "@/lib/supabase";
 
 function ProcessingView({ progress }: { progress: string }) {
   const t = useTranslations("processing");
@@ -73,9 +74,13 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const downloadUrl = getDownloadUrl(job.job_id);
   const [sharing, setSharing] = useState(false);
   const [pluginNLE, setPluginNLE] = useState<PluginNLE>(null);
+  const [sessionToken, setSessionToken] = useState<string>("");
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
+    createClient().auth.getSession().then(({ data }) => {
+      if (data.session?.access_token) setSessionToken(data.session.access_token);
+    });
   }, []);
 
   async function handleSaveMp4() {
@@ -150,13 +155,11 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         <div className="mb-4">
           <button
             onClick={() => {
-              const filename = `${job.job_id}_editclone.zip`;
               if (pluginNLE === "fcp") {
-                if (!importToFCP(downloadUrl, filename)) {
-                  window.open(downloadUrl);
-                }
+                const sent = importToFCP(job.job_id, sessionToken, API_URL);
+                if (!sent) window.open(downloadUrl);
               } else if (pluginNLE === "premiere") {
-                importToPremiere(downloadUrl, filename);
+                importToPremiere(job.job_id, sessionToken, API_URL);
               } else {
                 importToDaVinci(downloadUrl);
               }

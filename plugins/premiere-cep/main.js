@@ -1,70 +1,105 @@
 /* global CSInterface */
 
-// EditClone の本番 URL（デプロイ後に変更すること）
-var EDITCLONE_URL = "https://frontend-six-bice-51.vercel.app/ja/dashboard?plugin=premiere";
-
 var csInterface = typeof CSInterface !== "undefined" ? new CSInterface() : null;
-var pendingDownloadUrl = null;
-var pendingFilename = null;
 
 // ----- 起動 -----
 
 document.addEventListener("DOMContentLoaded", function () {
   var frame = document.getElementById("app-frame");
-  frame.src = EDITCLONE_URL;
+  // nle=premiere クエリを付けてプラグインモードで開く
+  var baseUrl = "https://frontend-six-bice-51.vercel.app";
+  frame.src = baseUrl + "/ja/dashboard?nle=premiere";
 
-  // iframe からの postMessage を受信する（EditClone web app が importFCPXML を送信）
+  // iframe からの postMessage を受信する
   window.addEventListener("message", function (event) {
     var data = event.data;
-    if (!data || data.action !== "importFCPXML") return;
+    if (!data || !data.action) return;
 
-    pendingDownloadUrl = data.url;
-    pendingFilename = data.filename || "editclone_project.zip";
-
-    var banner = document.getElementById("import-banner");
-    var msg = document.getElementById("import-message");
-    banner.classList.remove("hidden");
-    msg.textContent = "\"" + pendingFilename + "\" を Premiere にインポート";
+    if (data.action === "importPremiereXML") {
+      // 新プロトコル: jobId + token + apiBase を使って XML を直接ダウンロード
+      handleImportPremiereXML(data.jobId, data.token, data.apiBase);
+    } else if (data.action === "importFCPXML") {
+      // 後方互換: ZIP ダウンロード URL が渡された場合はそのままダウンロード
+      handleLegacyDownload(data.url, data.filename || "editclone_project.zip");
+    }
   });
 });
 
-// ----- インポートボタン -----
+// ----- Premiere XML 直接インポート（推奨） -----
 
-function triggerImport() {
-  if (!pendingDownloadUrl) return;
+function handleImportPremiereXML(jobId, token, apiBase) {
+  if (!jobId || !token || !apiBase) {
+    showBanner("エラー: 認証情報が不足しています", "error");
+    return;
+  }
 
-  var btn = document.getElementById("import-btn");
-  btn.disabled = true;
-  btn.textContent = "ダウンロード中...";
+  var xmlUrl = apiBase + "/plugin/jobs/" + jobId + "/premiere-xml";
+  showBanner("Premiere XML をダウンロード中...", "loading");
 
-  // Node.js (CEP) でファイルをダウンロードして ExtendScript に渡す
-  downloadZip(pendingDownloadUrl, pendingFilename, function (localPath) {
-    if (localPath) {
-      // ExtendScript 経由で Premiere にインポート
-      importViaExtendScript(localPath, function (result) {
-        btn.disabled = false;
-        if (result === "ok") {
-          btn.textContent = "✓ インポート完了";
-          setTimeout(function () {
-            document.getElementById("import-banner").classList.add("hidden");
-            btn.textContent = "Premiere Pro にインポート";
-          }, 3000);
-        } else {
-          btn.textContent = "エラー: " + result;
-        }
-      });
-    } else {
-      btn.disabled = false;
-      btn.textContent = "ダウンロードに失敗しました";
+  downloadWithAuth(xmlUrl, token, jobId + "_editclone.xml", function (localPath, err) {
+    if (err || !localPath) {
+      showBanner("ダウンロードエラー: " + (err || "不明"), "error");
+      return;
     }
+    showBanner("Premiere Pro にインポート中...", "loading");
+    importXMLViaExtendScript(localPath, function (result) {
+      if (result === "ok") {
+        showBanner("✓ インポート完了！ プロジェクトパネルを確認してください", "success");
+        setTimeout(hideBanner, 5000);
+      } else if (result && result.indexOf("unzip_required") !== -1) {
+        showBanner("ファイルを保存しました。Premiere で手動で File > Import してください", "info");
+      } else {
+        showBanner("インポートエラー: " + result, "error");
+      }
+    });
   });
 }
 
-// ----- ファイルダウンロード (Node.js / XMLHttpRequest) -----
+// ----- ファイルダウンロード (認証ヘッダー付き, Node.js) -----
 
-function downloadZip(url, filename, callback) {
+function downloadWithAuth(url, token, filename, callback) {
   try {
-    // CEP 環境: Node.js を使用
+    var os = require("os");
+    var path = require("path");
+    var fs = require("fs");
+    var https = require("https");
+    var http = require("http");
+
+    var tmpPath = path.join(os.tmpdir(), filename);
+    var file = fs.createWriteStream(tmpPath);
+    var protocol = url.startsWith("https") ? https : http;
+
+    var parsedUrl = require("url").parse(url);
+    var options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port,
+      path: parsedUrl.path,
+      headers: { "Authorization": "Bearer " + token }
+    };
+
+    protocol.get(options, function (response) {
+      if (response.statusCode !== 200) {
+        callback(null, "HTTP " + response.statusCode);
+        return;
+      }
+      response.pipe(file);
+      file.on("finish", function () {
+        file.close(function () { callback(tmpPath, null); });
+      });
+    }).on("error", function (e) {
+      callback(null, e.message);
+    });
+  } catch (e) {
+    callback(null, e.message);
+  }
+}
+
+// ----- 後方互換: ZIP/URL ダウンロード -----
+
+function handleLegacyDownload(url, filename) {
+  if (!url) return;
+  showBanner('"' + filename + '" をダウンロード中...', "loading");
+  try {
     var os = require("os");
     var path = require("path");
     var fs = require("fs");
@@ -78,10 +113,12 @@ function downloadZip(url, filename, callback) {
     protocol.get(url, function (response) {
       response.pipe(file);
       file.on("finish", function () {
-        file.close(function () { callback(tmpPath); });
+        file.close(function () {
+          showBanner("保存先: " + tmpPath + "（ZIP を解凍して手動インポートしてください）", "info");
+        });
       });
     }).on("error", function () {
-      callback(null);
+      showBanner("ダウンロードに失敗しました", "error");
     });
   } catch (e) {
     // フォールバック: ブラウザダウンロード
@@ -89,19 +126,35 @@ function downloadZip(url, filename, callback) {
     a.href = url;
     a.download = filename;
     a.click();
-    callback(null);
+    hideBanner();
   }
 }
 
 // ----- ExtendScript 呼び出し -----
 
-function importViaExtendScript(zipPath, callback) {
+function importXMLViaExtendScript(xmlPath, callback) {
   if (!csInterface) {
     callback("CSInterface not available");
     return;
   }
-  var script = "importEditCloneZip(\"" + zipPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + "\")";
-  csInterface.evalScript(script, function (result) {
+  var escaped = xmlPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  csInterface.evalScript('importEditCloneXML("' + escaped + '")', function (result) {
     callback(result || "ok");
   });
+}
+
+// ----- バナー UI -----
+
+function showBanner(message, type) {
+  var banner = document.getElementById("import-banner");
+  var msg = document.getElementById("import-message");
+  if (!banner || !msg) return;
+  msg.textContent = message;
+  banner.className = "import-banner " + (type || "");
+  banner.classList.remove("hidden");
+}
+
+function hideBanner() {
+  var banner = document.getElementById("import-banner");
+  if (banner) banner.classList.add("hidden");
 }

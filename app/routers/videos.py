@@ -185,6 +185,7 @@ async def process_video(
     background_tasks: BackgroundTasks,
     noise_db: float = -30.0,
     min_duration: float = 0.5,
+    prompt: str = "",
     user: dict = Depends(require_user),
 ):
     """全処理を非同期ジョブとして実行。プラン制限チェック後に job_id を即座に返す。"""
@@ -231,7 +232,7 @@ async def process_video(
             detail={"code": "USAGE_ERROR", "message": "使用回数の記録に失敗しました。もう一度お試しください。"},
         )
 
-    job = create_job(video_id, path, noise_db, min_duration, user_id=user["id"])
+    job = create_job(video_id, path, noise_db, min_duration, user_id=user["id"], prompt=prompt)
     background_tasks.add_task(run_job, job.id)
 
     log_event("process_start", user_id=user["id"], video_id=video_id, job_id=job.id,

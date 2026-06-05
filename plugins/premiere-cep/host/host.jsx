@@ -1,61 +1,52 @@
 /**
  * EditClone — Premiere Pro ExtendScript ホスト
- * ZIP を解凍して FCPXML を Premiere プロジェクトにインポートする。
- *
- * CEP の main.js から evalScript("importEditCloneZip(path)") で呼ばれる。
+ * Premiere XML (XMEML) ファイルをプロジェクトに直接インポートする。
+ * CEP の main.js から evalScript("importEditCloneXML(path)") で呼ばれる。
  */
 
 /**
- * ZIP 内の .fcpxml と media/ フォルダを Premiere にインポートする。
- * @param {string} zipPath - ローカルの ZIP ファイルパス
+ * XML ファイルを現在の Premiere プロジェクトにインポートする。
+ * @param {string} xmlPath - ローカルの .xml ファイルパス
  * @returns {string} "ok" または エラーメッセージ
  */
-function importEditCloneZip(zipPath) {
+function importEditCloneXML(xmlPath) {
   try {
-    var zipFile = new File(zipPath);
-    if (!zipFile.exists) {
-      return "ZIP not found: " + zipPath;
+    var xmlFile = new File(xmlPath);
+    if (!xmlFile.exists) {
+      return "file_not_found:" + xmlPath;
     }
 
-    // ZIP を同じフォルダに展開
-    var destFolder = new Folder(zipFile.parent.fsName + "/" + zipFile.name.replace(".zip", ""));
-    if (!destFolder.exists) {
-      destFolder.create();
+    var proj = app.project;
+    if (!proj) {
+      return "no_active_project";
     }
 
-    // ExtendScript には ZIP 展開の標準APIがないため
-    // Premiere の app.project.importFiles() で FCPXML を直接インポートできるかを試みる
-    // 先に FCPXML を手動パスで探す（ユーザーが解凍済みの場合）
-    var fcpxmlPath = zipFile.parent.fsName + "/" + zipFile.name.replace(".zip", ".fcpxml");
-    var fcpxmlFile = new File(fcpxmlPath);
+    // Premiere Pro は XMEML (FCP 7 XML) を importFiles() で読み込める
+    var importArray = [xmlPath];
+    proj.importFiles(importArray, true, proj.rootItem, false);
 
-    if (fcpxmlFile.exists) {
-      return importFCPXML(fcpxmlPath);
-    }
+    // インポート後に最新のシーケンスをアクティブにする
+    activateLatestSequence();
 
-    // ZIP が未解凍の場合: ユーザーに案内するメッセージを返す
-    return "unzip_required:" + zipPath;
+    return "ok";
   } catch (e) {
-    return "error:" + e.message;
+    return "import_error:" + e.message;
   }
 }
 
 /**
- * FCPXML ファイルを現在の Premiere プロジェクトにインポートする。
+ * プロジェクト内の最後のシーケンスをアクティブにする。
  */
-function importFCPXML(fcpxmlPath) {
+function activateLatestSequence() {
   try {
-    var proj = app.project;
-    if (!proj) {
-      return "No active project";
+    var seqCount = app.project.sequences.numSequences;
+    if (seqCount > 0) {
+      var seq = app.project.sequences[seqCount - 1];
+      app.project.activeSequence = seq;
+      seq.setPlayerPosition("0");
     }
-
-    var importArray = [fcpxmlPath];
-    var suppressDialog = true;
-    proj.importFiles(importArray, suppressDialog, proj.rootItem, false);
-    return "ok";
   } catch (e) {
-    return "import_error:" + e.message;
+    // シーケンス操作は必須ではないので失敗しても続行
   }
 }
 
