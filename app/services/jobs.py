@@ -348,9 +348,12 @@ def run_job(job_id: str) -> None:
         srt_content = segments_to_srt(transcript["segments"])
 
         job.progress = "FCPXMLを生成中..."
+        remapped_segs_for_fcpxml = remap_segments_for_cuts(
+            transcript["segments"], cuts, total_duration
+        )
         fcpxml_content = build_fcpxml(
             path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts,
-            video_info=info,
+            video_info=info, segments=remapped_segs_for_fcpxml,
         )
 
         job.progress = "Premiere XML を生成中..."
