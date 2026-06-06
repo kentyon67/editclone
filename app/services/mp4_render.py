@@ -186,7 +186,17 @@ def render_mp4(video_path: Path, cuts: list[dict], output_path: Path) -> bool:
             parts.append(f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{i}]")
 
     if has_audio:
-        labels = "".join(f"[v{i}][a{i}]" for i in range(n))
+        # カット点のクリックノイズを防ぐため各セグメントに 20ms フェードを付ける
+        faded_parts: list[str] = []
+        for i, (s, e) in enumerate(keep_segs):
+            seg_dur = e - s
+            fade_dur = min(0.02, seg_dur / 4)  # 20ms or 1/4 of segment, whichever shorter
+            parts.append(
+                f"[a{i}]afade=t=in:st=0:d={fade_dur:.4f},"
+                f"afade=t=out:st={max(0, seg_dur - fade_dur):.4f}:d={fade_dur:.4f}[af{i}]"
+            )
+            faded_parts.append(f"af{i}")
+        labels = "".join(f"[v{i}][{faded_parts[i]}]" for i in range(n))
         parts.append(f"{labels}concat=n={n}:v=1:a=1[outv][outa]")
         map_args = ["-map", "[outv]", "-map", "[outa]"]
         audio_args = ["-c:a", "aac", "-b:a", "128k"]

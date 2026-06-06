@@ -77,26 +77,28 @@
 | Dashboard プロジェクトリンク | ✅ | `frontend/app/[locale]/dashboard/` |
 | Results ページプロジェクトリンク | ✅ | `frontend/app/[locale]/results/` |
 
-### Phase 4: Rich Editing — 🔄 進行中
+### Phase 4: Rich Editing — ✅ 大半完了
 
-| 機能 | 状態 | 備考 |
+| 機能 | 状態 | ファイル |
 |------|------|------|
 | FCPXML 字幕 caption lane | ✅ | `app/services/fcpxml.py` |
-| EDL ドロップフレーム対応 | ✅ | `app/services/edl.py` |
-| DaVinci スクリプト ジョブ一覧選択 | ✅ | `plugins/davinci-script/` |
-| テロップスタイル設定（フォント・位置） | ⏳ | Style Profile 拡張 |
-| 画像・写真スライド動画化 | ⏳ | 画像素材対応 |
-| ズーム演出・B-roll 提案 | 演出強化 |
-| Premiere XML / DaVinci XML 出力 | マルチ NLE 対応 |
+| NTSC ドロップフレームタイムコード（29.97fps） | ✅ | `fcpxml.py`, `premiere_xml.py`, `edl.py` |
+| Premiere Pro XML 出力（XMEML） | ✅ | `app/services/premiere_xml.py` |
+| DaVinci EDL 出力 | ✅ | `app/services/edl.py` |
+| Caption Style カスタマイズ（フォント・位置・色・太字） | ✅ | `app/services/mp4_render.py`, `app/routers/style_profiles.py` |
+| Style Profile → MP4 字幕焼き込み連動 | ✅ | `app/services/jobs.py` |
+| ZIP 構造整理（fcp/premiere/davinci/subtitles/media） | ✅ | `app/services/jobs.py` |
+| カット点音声クロスフェード | ⏳ | 未実装（クリックノイズ対策） |
+| 画像・写真スライド動画化 | ⏳ | 未実装 |
+| ズーム演出・B-roll 提案 | ⏳ | 未実装 |
 
-### Phase 5: Plugin 早期着手（Phase 2〜3 と並行） — ⏳ 未着手
+### Phase 5: Plugin 早期着手 — 🔄 コード完了・申請待ち
 
-| 機能 | 審査期間 | 備考 |
-|------|---------|------|
-| Premiere Plugin（UXP）設計・開発・申請 | Adobe: 2〜4 週間 | Phase 2 開始と同時着手 |
-| Final Cut Extension 設計・開発・申請 | Apple: 1〜3 ヶ月 | Phase 2 開始と同時着手 |
-| DaVinci Script / Panel 調査 | — | Phase 3 中 |
-| CapCut 連携調査 | — | Phase 6 以降 |
+| Plugin | コード | 申請 | 審査期間 |
+|--------|--------|------|---------|
+| FCP Extension（Swift/SwiftUI WKWebView） | ✅ `plugins/fcp-extension/` | ⏳ 未申請 | Apple: 1〜3 ヶ月 |
+| Premiere CEP Panel（HTML/JS） | ✅ `plugins/premiere-cep/` | ⏳ 未申請 | Adobe: 2〜4 週間 |
+| DaVinci Script（Python） | ✅ `plugins/davinci-script/` | — | 申請不要（配布のみ） |
 
 ### Phase 6: Learning & Marketplace — ⏳ 未着手
 

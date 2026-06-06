@@ -1,7 +1,7 @@
 # EditClone ロードマップ
 
-バージョン: 1.0.0  
-最終更新: 2026-06-04
+バージョン: 2.0.0  
+最終更新: 2026-06-06
 
 ---
 
@@ -9,209 +9,130 @@
 
 | フェーズ | 内容 | 状態 |
 |---------|------|------|
-| Phase 1 | Web v1 安定化（デプロイ・MP4・制限・Analytics） | 🔄 進行中 |
-| Phase 2 | Style Engine v1（Style Profile 生成・適用） | ⏳ 未着手 |
-| Phase 3 | Project Sync Foundation | ⏳ 未着手 |
-| Phase 4 | Rich Editing（テロップ・画像・ズーム・Premiere XML） | ⏳ 未着手 |
-| Phase 5 | Plugin 早期着手（Phase 2〜3 と並行） | ⏳ 未着手 |
+| Phase 1 | Web v1 安定化（デプロイ・MP4・制限・Analytics） | ✅ 完了 |
+| Phase 2 | Style Engine v1（Style Profile 生成・適用） | ✅ 完了 |
+| Phase 3 | Project Sync Foundation | ✅ 完了 |
+| Phase 4 | Rich Editing（テロップ・Premiere XML・EDL・Caption Style） | ✅ 大半完了 |
+| Phase 5 | Plugin 早期着手（Phase 2〜3 と並行） | 🔄 コード完了・未申請 |
 | Phase 6 | Learning & Marketplace | ⏳ 未着手 |
 
 ---
 
-## Phase 1: Web v1 安定化（現在）
+## Phase 1: Web v1 安定化 ✅
 
-**目標:** 本番環境で安定稼働し、課金・制限・Analytics が機能する状態にする
-
-### 1-1. 本番デプロイ（完了）
-
-- [x] Railway バックエンドデプロイ（`https://editclone-backend-production.up.railway.app`）
-- [x] Vercel フロントエンドデプロイ（`https://frontend-six-bice-51.vercel.app`）
+- [x] Railway バックエンドデプロイ
+- [x] Vercel フロントエンドデプロイ
 - [x] Supabase Auth 連携（JWT 検証ミドルウェア）
-- [x] Supabase Storage 連携（動画ファイル保存）
+- [x] Supabase Storage 連携
+- [x] Supabase ジョブ永続化（Railway 再起動耐性）
 - [x] Stripe Checkout / Webhook / Portal
-- [x] Stripe 商品・価格設定（Pro ¥980 / Creator ¥2,980 / Studio ¥9,800）
-
-### 1-2. 残り必要な本番設定
-
-- [ ] Railway に SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / STRIPE_SECRET_KEY を設定
-- [ ] Railway に STRIPE_WEBHOOK_SECRET を設定
-- [ ] Vercel に NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY を設定
-- [ ] Vercel に NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY を設定
-- [ ] Supabase SQL Editor で `supabase/schema.sql` を実行
-- [ ] Supabase Auth → Site URL を Vercel 本番 URL に更新
-
-### 1-3. MP4 出力
-
-- [ ] フロントエンド側 ffmpeg.wasm 統合（5分以下の動画）
-- [ ] 長動画（5分超）用のサーバーレンダリング設計（Modal / Replicate）
-- [ ] プランごとの最大時間制限エンフォース
-
-### 1-4. 処理履歴・利用回数制限
-
-- [ ] `usage_logs` テーブルへの月次カウント記録
-- [ ] プランごとの上限チェック（Free: 3本、Pro: 30本、Creator: 100本）
-- [ ] 制限超過時の適切なエラーレスポンスとフロントエンド表示
-
-### 1-5. Analytics 基盤
-
-- [ ] 動画処理イベントを Supabase ログに記録
-- [ ] 月次 MRR 計算（Stripe Webhook から集計）
-- [ ] ユーザー行動ログ（アップロード・処理完了・ダウンロード）
+- [x] 動画アップロード → 文字起こし → 無音検出 → FCPXML → ZIP
+- [x] 非同期ジョブ処理（BackgroundTasks）
+- [x] MP4 出力（ffmpeg filter_complex trim+concat + 字幕焼き込み）
+- [x] プランごとの利用回数・時間制限
+- [x] Analytics 基盤（Supabase ログ）
+- [x] フロントエンド全ページ（Landing/Auth/Dashboard/Upload/Results/Pricing/Account）
+- [x] i18n 日英対応（next-intl）
+- [x] 処理結果インライン MP4 プレーヤー（results ページ）
 
 ---
 
-## Phase 2: Style Engine v1
+## Phase 2: Style Engine v1 ✅
 
-**目標:** Style Profile を生成・保存・適用できる状態にする
-
-### 2-1. Style Profile CRUD
-
-- [ ] `style_profiles` テーブル設計・Supabase スキーマ追加
-- [ ] Style Profile 作成 / 編集 / 削除 API
-- [ ] フロントエンド Style Profile 管理 UI
-
-### 2-2. 参考動画 URL 登録
-
-- [ ] `reference_videos` テーブル設計
-- [ ] URL 登録・メモ入力・Style Profile への紐づけ
-- [ ] YouTube oEmbed によるタイトル・サムネイル取得
-- [ ] **動画ダウンロードは行わない（永続禁止）**
-
-### 2-3. 参考動画ファイル分析
-
-- [ ] 参考動画ファイルのアップロード機能
-- [ ] カットテンポ分析（平均カット間隔・リズム）
-- [ ] 字幕密度分析
-- [ ] 無音量・間の取り方分析
-- [ ] 分析結果を Style Profile に反映
-
-### 2-4. Style Profile 生成・適用
-
-- [ ] 分析結果から Style Profile を自動生成
-- [ ] 新規動画への Style Profile 適用
-- [ ] LLM（Claude API）による編集方針生成
-- [ ] 採用 / 却下 / 修正フィードバックの記録
+- [x] Style Profile CRUD（作成・編集・削除・アクティブ切替）
+- [x] 参考動画 URL 登録（YouTube / Vimeo oEmbed のみ）
+- [x] フィードバック記録（accept / partial / reject）
+- [x] フィードバック統計（accept率・件数）
+- [x] AI Profile 改善提案（Claude API / claude-sonnet-4-6）
+- [x] Style Profile 選択時の設定自動反映（noise_db / min_silence / prompt）
+- [x] Styles ページ UI（参考動画・AI改善・stats表示）
 
 ---
 
-## Phase 3: Project Sync Foundation
+## Phase 3: Project Sync Foundation ✅
 
-**目標:** Web と Plugin の同期基盤を設計・実装する
-
-### 3-1. Project モデル定義
-
-- [ ] `projects` テーブル設計・スキーマ追加
-- [ ] `project_revisions` テーブル設計
-- [ ] Project CRUD API
-
-### 3-2. Export 履歴管理
-
-- [ ] 出力形式・出力日時・バージョンの記録
-- [ ] フロントエンド Project 管理 UI
-- [ ] Sync Status 管理（draft / exported / modified_in_plugin / synced / conflict）
-
-### 3-3. フィードバック記録
-
-- [ ] `accepted_suggestions` / `rejected_suggestions` / `manual_adjustments` の記録 API
-- [ ] フロントエンドでの採用 / 却下 UI
-
-### 3-4. Sync API 設計
-
-- [ ] Plugin 連携を想定した REST API 設計
-- [ ] Conflict Handling 基本実装（Plugin 優先 / Web に通知）
-- [ ] API 認証（Plugin → Web）
+- [x] Project / ProjectRevision モデル（supabase/schema.sql v5）
+- [x] ジョブ完了時プロジェクト自動作成
+- [x] Export 履歴・Sync Status 管理
+- [x] Plugin リビジョン受信 + 競合検出
+- [x] 再エクスポート（POST /projects/{id}/re-export）
+- [x] プロジェクト詳細ページ
+- [x] Dashboard + Results ページへのプロジェクトリンク
 
 ---
 
-## Phase 4: Rich Editing
+## Phase 4: Rich Editing ✅（大半完了）
 
-**目標:** 出力品質を大幅に向上させる
+**完了済み:**
+- [x] FCPXML 字幕 caption lane（FCP でテキストトラックとして読み込み）
+- [x] NTSC ドロップフレームタイムコード（29.97fps 対応）
+- [x] Premiere Pro XML 出力（XMEML 形式）
+- [x] DaVinci EDL 出力（ドロップフレーム対応）
+- [x] Caption Style カスタマイズ（フォントサイズ・位置・色・太字）
+- [x] Style Profile → MP4 字幕焼き込みへの反映
+- [x] ZIP 構造整理（fcp/ + premiere/ + davinci/ + subtitles/ + media/）
 
-### 4-1. テロップ強化
-
-- [ ] テロップスタイル（フォント・色・位置）の FCPXML 反映
-- [ ] SRT 字幕のスタイル指定対応
-- [ ] テロップ密度・位置の Style Profile 連動
-
-### 4-2. 画像・写真対応
-
-- [ ] 写真スライドショー動画化
-- [ ] 動画内画像挿入
-- [ ] ロゴ挿入
-- [ ] ズーム / パン（ケン・バーンズエフェクト）
-
-### 4-3. ズーム・演出
-
-- [ ] ズームインポイントの自動提案
-- [ ] B-roll 挿入タイミング提案
-- [ ] トランジション提案
-
-### 4-4. マルチ NLE 出力強化
-
-- [ ] Premiere Pro XML 出力
-- [ ] DaVinci Resolve XML / EDL 出力
-- [ ] FCPXML の品質・互換性向上
+**残タスク:**
+- [ ] カット点での音声クロスフェード（現状は無処理のためクリックノイズが出る可能性あり）
+- [ ] テロップスタイルの FCPXML/Premiere XML への反映（現状は焼き込みのみ）
+- [ ] 画像・写真スライド動画化
+- [ ] ズーム演出・B-roll 提案
 
 ---
 
-## Phase 5: Plugin 早期着手（Phase 2〜3 と並行）
+## Phase 5: Plugin 早期着手 🔄（コード完了・申請待ち）
 
-**目標:** 審査期間を見越して早期にコード開発・申請を開始する
+Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
-Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間  
-**Phase 2 開始と同時に Plugin 設計を着手し、Phase 3 完了時点で申請する**
+### FCP Extension（fcp-extension/）
 
-### 5-1. Premiere Plugin（UXP）
+- [x] Swift/SwiftUI WKWebView ベース
+- [x] `window.editcloneBridge = true` inject
+- [x] `window.editcloneNLE = 'fcp'` inject
+- [x] FCPXML 認証付きダウンロード（Bearer トークン）
+- [x] NSWorkspace.shared.open で FCP 直接起動
+- [ ] macOS 実機テスト・署名
+- [ ] Mac App Store 申請（Apple Developer Program 登録必要）
 
-- [ ] Premiere UXP Plugin 設計（Panel UI + API 連携）
-- [ ] EditClone アカウントログイン機能
-- [ ] Style Profile 選択・適用機能
-- [ ] Project 読み込み・タイムライン反映
-- [ ] 修正内容の Sync API 送信
-- [ ] Adobe Marketplace 申請
+### Premiere CEP（premiere-cep/）
 
-### 5-2. Final Cut Extension
+- [x] CEP Panel（HTML/JS）
+- [x] iframe で Web アプリをロード（?nle=premiere）
+- [x] postMessage → Premiere XML 認証付きダウンロード
+- [x] ExtendScript での Premiere インポート
+- [ ] Windows 実機テスト
+- [ ] Adobe Exchange 申請
 
-- [ ] Workflow Extension 設計（Swift / SwiftUI）
-- [ ] Apple Developer Program 登録・署名
-- [ ] EditClone アカウントログイン機能
-- [ ] Style Profile 選択・タイムライン反映
-- [ ] Project Sync 連携
-- [ ] Mac App Store 申請
+### DaVinci Script（davinci-script/）
 
-### 5-3. DaVinci Resolve 連携
-
-- [ ] DaVinci Resolve Script / Fusion Script 調査
-- [ ] Panel 開発可能性調査
-- [ ] MVP 連携方式確定
-
-### 5-4. CapCut 連携調査
-
-- [ ] CapCut API / SDK 調査
-- [ ] 連携方式確定（Phase 6 以降）
+- [x] Python スクリプト（Fusion Scripts/Utility に配置）
+- [x] 完了ジョブ一覧取得 + 選択
+- [x] ZIP ダウンロード → FCPXML タイムライン自動生成
+- [ ] ユーザー設定の GUI 化（現状はファイル直接編集が必要）
+- [ ] 実機テスト（DaVinci Resolve 18+）
 
 ---
 
-## Phase 6: Learning & Marketplace
+## Phase 6: Learning & Marketplace ⏳（未着手）
 
 **目標:** AI 学習ループの完成と収益拡大
 
-### 6-1. 編集前後ペア分析
+### 6-1. 編集前後ペア分析（最重要差別化機能）
 
 - [ ] 編集前動画 + 編集後動画のペアアップロード
 - [ ] カット位置・テロップ・演出の差分抽出
 - [ ] Style Profile への自動反映
-- [ ] 「編集 DNA」生成
+- [ ] 「編集 DNA」生成（ユーザーごとの編集パターン）
 
 ### 6-2. ユーザーフィードバック学習
 
 - [ ] 採用 / 却下データの蓄積分析
 - [ ] Plugin 修正データの Style Profile 反映
-- [ ] パーソナライズ精度向上
+- [ ] パーソナライズ精度の定量評価
 
 ### 6-3. Style Marketplace
 
-- [ ] Style Profile 公開 / 販売機能
+- [ ] Style Profile 公開 / 販売
 - [ ] 購入・評価・レビュー
 - [ ] クリエイター収益分配
 - [ ] ジャンル別ランキング
@@ -219,7 +140,7 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 ### 6-4. チーム・API
 
 - [ ] チーム招待・権限管理（Studio プラン）
-- [ ] 外部 API 公開（Studio+ プラン）
+- [ ] 外部 API 公開
 - [ ] Webhook 連携
 
 ---
@@ -228,5 +149,6 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 | 日付 | バージョン | 内容 |
 |------|-----------|------|
-| 2026-06-03 | 0.1.0 | 正式ロードマップ初版（MVP 時点） |
-| 2026-06-04 | 1.0.0 | 6 フェーズ構成に全面改定。Style Engine・Project Sync・Plugin 並行着手・MP4・Analytics を追加 |
+| 2026-06-03 | 0.1.0 | 正式ロードマップ初版 |
+| 2026-06-04 | 1.0.0 | 6 フェーズ構成に改定 |
+| 2026-06-06 | 2.0.0 | Phase 1-4 完了・Phase 5 コード完了を反映。残タスクを明確化 |
