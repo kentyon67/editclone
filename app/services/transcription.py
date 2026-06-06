@@ -21,12 +21,15 @@ def merge_segments(
     max_chars: int = 40,
     max_duration: float = 5.0,
     min_gap: float = 0.6,
+    lang: str = "",
 ) -> list[dict]:
     """
     短いWhisperセグメントを自然な字幕単位にマージする。
-    max_chars: 1ブロックの最大文字数（日本語40字、英語は長め）
+    lang: 言語コード。英語（en）は max_chars を 80 に拡張する。
     min_gap: この秒数以上の無音があれば必ず分割
     """
+    if lang == "en" and max_chars == 40:
+        max_chars = 80  # 英語は文字単位でなく単語単位なので長め
     sentence_enders = set("。！？.!?")
     merged: list[dict] = []
     cur: dict | None = None
@@ -90,13 +93,14 @@ def transcribe_video(video_path: Path) -> dict:
         })
         full_text_parts.append(seg.text)
 
-    merged_segments = merge_segments(raw_segments)
+    merged_segments = merge_segments(raw_segments, lang=info.language)
 
+    sep = "" if info.language == "ja" else " "
     return {
         "language": info.language,
         "language_probability": round(info.language_probability, 3),
         "duration_seconds": round(info.duration, 3),
-        "transcript": "".join(full_text_parts).strip(),
+        "transcript": sep.join(p.strip() for p in full_text_parts if p.strip()),
         "segments": merged_segments,
         "raw_segments": raw_segments,
     }

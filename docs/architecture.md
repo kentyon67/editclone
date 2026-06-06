@@ -222,8 +222,9 @@ render_mp4（mp4_render.py）
   └── カットあり → filter_complex:
         [0:v]trim=start=S:end=E,setpts=PTS-STARTPTS[v0]
         [0:a]atrim=start=S:end=E,asetpts=PTS-STARTPTS[a0]
-        ...
-        [v0][a0][v1][a1]...concat=n=N:v=1:a=1[outv][outa]
+        ↓ 各音声セグメントに 20ms afade（クリックノイズ防止）
+        [a0]afade=t=in:st=0:d=0.02,afade=t=out:st=...:d=0.02[af0]
+        [v0][af0][v1][af1]...concat=n=N:v=1:a=1[outv][outa]
         → libx264 CRF=18, preset=fast, AAC 128k, faststart
 
 add_subtitles_to_mp4
@@ -231,6 +232,13 @@ add_subtitles_to_mp4
   ├── ASS color: #RRGGBB → &H00BBGGRR（リトルエンディアン BGR）
   ├── フォント: Noto Sans CJK JP（Railway コンテナに fonts-noto-cjk インストール済み）
   └── Style Profile.caption_style から font_size / position / color / bold を取得
+
+build_fcpxml（fcpxml.py）
+  ├── caption_style → text-style-def（fontSize / fontColor / bold を FCP に直接反映）
+  └── ASS color 変換: #RRGGBB → 'R G B 1'（FCPXML normalized RGBA）
+
+build_premiere_xml（premiere_xml.py）
+  └── segments → sequence markers（字幕テキストをタイムラインマーカーとして埋め込み）
 ```
 
 ---
