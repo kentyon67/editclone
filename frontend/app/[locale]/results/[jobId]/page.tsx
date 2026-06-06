@@ -138,7 +138,10 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
     const mp4Url = getMp4Url(job.job_id);
     setSharing(true);
     try {
-      const res = await fetch(mp4Url);
+      const { createClient: _sc } = await import("@/lib/supabase");
+      const { data: _sd } = await _sc().auth.getSession();
+      const _tok = _sd.session?.access_token;
+      const res = await fetch(mp4Url, _tok ? { headers: { Authorization: `Bearer ${_tok}` } } : {});
       const blob = await res.blob();
       const file = new File([blob], "editclone_video.mp4", { type: "video/mp4" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {

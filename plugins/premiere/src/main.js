@@ -11,7 +11,7 @@ const WEB_BASE = "https://editclone.vercel.app";
 
 // ---- State ----
 let accessToken = null;
-let selectedJobId = null;
+let selectedJob = null;
 
 // ---- DOM helpers ----
 const $ = (id) => document.getElementById(id);
@@ -64,10 +64,16 @@ async function loadJobs() {
     const card = document.createElement("div");
     card.className = "job-card";
     card.dataset.jobId = job.job_id;
+    const cutBadge = job.cut_count != null
+      ? `<span class="badge cut-badge">${job.cut_count} cuts</span>`
+      : "";
     card.innerHTML = `
       <div class="name">${escapeHtml(job.video_name || job.filename)}</div>
       <div class="date">${formatDate(job.created_at)}</div>
-      ${job.has_mp4 ? '<span class="badge">MP4 あり</span>' : ""}
+      <div class="badges">
+        ${job.has_mp4 ? '<span class="badge mp4-badge">MP4</span>' : ""}
+        ${cutBadge}
+      </div>
     `;
     card.addEventListener("click", () => selectJob(card, job));
     list.appendChild(card);
@@ -79,21 +85,23 @@ async function loadJobs() {
 function selectJob(card, job) {
   document.querySelectorAll(".job-card").forEach((c) => c.classList.remove("selected"));
   card.classList.add("selected");
-  selectedJobId = job.job_id;
+  selectedJob = job;
 
-  // Remove any previous import section
+  // 既存のインポートセクションを削除
   const prev = document.querySelector(".import-section");
   if (prev) prev.remove();
 
   const section = document.createElement("div");
   section.className = "import-section";
   section.innerHTML = `
-    <h3>「${escapeHtml(job.video_name)}」をインポート</h3>
+    <h3>「${escapeHtml(job.video_name || job.filename)}」をインポート</h3>
     <button id="btn-do-import" class="btn btn-import">Premiere Pro にインポート</button>
+    <button id="btn-dl-srt" class="btn btn-ghost small">字幕 SRT をダウンロード</button>
   `;
   $("jobs-list").appendChild(section);
 
   document.getElementById("btn-do-import").addEventListener("click", () => importJob(job));
+  document.getElementById("btn-dl-srt").addEventListener("click", () => downloadSRT(job));
 }
 
 async function importJob(job) {
@@ -101,7 +109,7 @@ async function importJob(job) {
   $("import-status").textContent = "Premiere XML をダウンロード中...";
 
   try {
-    // Download Premiere XML
+    // Premiere XML をダウンロード
     const res = await fetch(
       `${API_BASE}/plugin/jobs/${job.job_id}/premiere-xml`,
       { headers: authHeaders() }
@@ -111,7 +119,6 @@ async function importJob(job) {
 
     $("import-status").textContent = "ファイルを保存中...";
 
-    // Save to temp folder
     const tempFolder = await fs.getTemporaryFolder();
     const xmlFile = await tempFolder.createFile(`editclone_${job.job_id}.xml`, {
       overwrite: true,
@@ -120,12 +127,13 @@ async function importJob(job) {
 
     $("import-status").textContent = "Premiere Pro にインポート中...";
 
-    // Import into Premiere Pro
     const ppCore = require("premierePro");
     const app = ppCore.app;
     if (!app.project) {
-      throw new Error("プロジェクトが開かれていません");
+      throw new Error("プロジェクトが開かれていません。Premiere Pro でプロジェクトを開いてください。");
     }
+
+    // importFiles(paths, suppressUI, targetBin, importAsNumberedStills)
     const imported = app.project.importFiles(
       [xmlFile.nativePath],
       true,
@@ -134,30 +142,64 @@ async function importJob(job) {
     );
 
     if (imported) {
-      $("import-status").textContent = "インポート完了！";
+      $("import-status").textContent = "✅ インポート完了！";
       setTimeout(() => showScreen("jobs"), 1500);
     } else {
-      throw new Error("インポートに失敗しました");
+      throw new Error("インポートに失敗しました。Premiere Pro でプロジェクトが開かれているか確認してください。");
     }
   } catch (err) {
-    $("import-status").textContent = `エラー: ${err.message}`;
-    setTimeout(() => showScreen("jobs"), 2500);
+    $("import-status").textContent = `❌ エラー: ${err.message}`;
+    setTimeout(() => showScreen("jobs"), 3000);
   }
 }
 
-// ---- Session storage ----
+async function downloadSRT(job) {
+  const btn = document.getElementById("btn-dl-srt");
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = "ダウンロード中...";
+
+  try {
+    // ZIPからSRTを取り出す代わりにAPIから直接取得（将来エンドポイント追加時に備え）
+    // 現状はZIP全体をダウンロードして SRT を案内
+    const res = await fetch(
+      `${API_BASE}/jobs/${job.job_id}/download`,
+      { headers: authHeaders() }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+
+    const tempFolder = await fs.getTemporaryFolder();
+    const zipFile = await tempFolder.createFile(`editclone_${job.job_id}.zip`, { overwrite: true });
+    const buf = await blob.arrayBuffer();
+    await zipFile.write(buf, { format: storage.formats.binary });
+
+    require("uxp").shell.openExternal(
+      `${WEB_BASE}/ja/results/${job.job_id}`
+    );
+    btn.textContent = "✅ Web で SRT をダウンロード";
+  } catch (err) {
+    btn.textContent = "❌ 失敗";
+    setTimeout(() => { btn.textContent = "字幕 SRT をダウンロード"; btn.disabled = false; }, 2000);
+    return;
+  }
+  setTimeout(() => { btn.textContent = "字幕 SRT をダウンロード"; btn.disabled = false; }, 3000);
+}
+
+// ---- Token 永続化（localStorage 使用 — UXP では sessionStorage が不安定）----
 function saveToken(token) {
-  try { sessionStorage.setItem("ec_token", token); } catch (_) {}
+  try { localStorage.setItem("ec_token", token); } catch (_) {}
   accessToken = token;
 }
 
 function loadToken() {
-  try { return sessionStorage.getItem("ec_token"); } catch (_) { return null; }
+  try { return localStorage.getItem("ec_token"); } catch (_) { return null; }
 }
 
 function logout() {
-  try { sessionStorage.removeItem("ec_token"); } catch (_) {}
+  try { localStorage.removeItem("ec_token"); } catch (_) {}
   accessToken = null;
+  selectedJob = null;
   showScreen("login");
 }
 
@@ -175,7 +217,7 @@ function formatDate(iso) {
   });
 }
 
-// ---- Event listeners ----
+// ---- Event Listeners ----
 $("btn-login").addEventListener("click", async () => {
   const email = $("input-email").value.trim();
   const password = $("input-password").value;
@@ -223,7 +265,6 @@ $("link-open-web").addEventListener("click", (e) => {
 
 // ---- Init ----
 async function initJobsScreen() {
-  // Verify token
   try {
     const res = await fetch(`${API_BASE}/plugin/me`, { headers: authHeaders() });
     if (!res.ok) throw new Error("auth");

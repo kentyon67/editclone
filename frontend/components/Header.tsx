@@ -2,7 +2,7 @@
 import { useTranslations, useLocale } from "next-intl";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Film, Globe } from "lucide-react";
+import { Film, Globe, Layers } from "lucide-react";
 
 export default function Header({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   const t = useTranslations("nav");
@@ -45,6 +45,10 @@ export default function Header({ isLoggedIn = false }: { isLoggedIn?: boolean })
               </Link>
               <Link href={`/${locale}/styles`} className="text-sm text-gray-600 hover:text-purple-600 transition-colors">
                 {t("styles")}
+              </Link>
+              <Link href={`/${locale}/projects`} className="flex items-center gap-1 text-sm text-gray-600 hover:text-purple-600 transition-colors">
+                <Layers className="w-3.5 h-3.5" />
+                {t("projects")}
               </Link>
               <Link href={`/${locale}/account`} className="text-sm bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
                 {t("account")}

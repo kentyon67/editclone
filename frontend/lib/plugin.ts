@@ -52,9 +52,10 @@ export function importToFCP(jobId: string, token: string, apiBase: string): bool
   if (wk?.messageHandlers?.editclone) {
     wk.messageHandlers.editclone.postMessage({
       action: "importFCPXML",
-      jobId,
+      // Swift 側が直接ダウンロードできるよう URL + ファイル名 + 認証トークンを渡す
+      url: `${apiBase}/plugin/jobs/${jobId}/fcpxml`,
+      filename: `editclone_${jobId}.fcpxml`,
       token,
-      apiBase,
     });
     return true;
   }

@@ -7,7 +7,8 @@
     "dashboard": "ダッシュボード",
     "styles": "スタイル",
     "account": "アカウント",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "projects": "プロジェクト"
   },
   "hero": {
     "badge": "マルチ NLE 対応 AI 編集エージェント",
@@ -333,7 +334,12 @@
   },
   "projects": {
     "title": "プロジェクト詳細",
+    "listTitle": "プロジェクト一覧",
+    "listSubtitle": "処理した動画のプロジェクト履歴",
+    "listEmpty": "プロジェクトがありません",
+    "listEmptySub": "動画を処理するとプロジェクトが自動作成されます",
     "back": "ダッシュボードへ",
+    "backToList": "一覧に戻る",
     "notFound": "プロジェクトが見つかりません",
     "originalJob": "元の処理ジョブ",
     "viewResults": "結果を見る",

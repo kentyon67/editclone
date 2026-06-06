@@ -74,7 +74,8 @@ export function getFcpxmlUrl(jobId: string): string {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
-  const res = await fetch(`${API_URL}/jobs/${jobId}`);
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/jobs/${jobId}`, { headers });
   if (!res.ok) return handleError(res, "Job fetch failed");
   return res.json();
 }

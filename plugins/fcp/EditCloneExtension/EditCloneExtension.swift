@@ -41,13 +41,12 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
     }
 
     convenience init() {
-        // WKWebView with JS bridge
         let config = WKWebViewConfiguration()
         let contentController = WKUserContentController()
 
-        // Inject bridge detection script
+        // ブリッジ検出スクリプト + FCP モード設定
         let bridgeScript = WKUserScript(
-            source: "window.editcloneBridge = true;",
+            source: "window.editcloneBridge = true; window.editcloneNLE = 'fcp';",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
         )
@@ -67,11 +66,11 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
         self.init(window: window)
         self.webView = webView
 
-        // Register message handler for JS → Swift communication
+        // JS → Swift メッセージハンドラ登録
         contentController.add(self, name: "editclone")
         webView.navigationDelegate = self
 
-        // Load the EditClone web app in FCP plugin mode
+        // nle=fcp パラメーターをつけて Web アプリを読み込む
         var comps = URLComponents(string: "\(webBase)/ja/dashboard")!
         comps.queryItems = [URLQueryItem(name: "nle", value: "fcp")]
         if let url = comps.url {
@@ -81,7 +80,7 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
 
     // MARK: WKScriptMessageHandler
 
-    /// JS から postMessage("editclone", { action: "importFCPXML", url: "...", filename: "..." }) が呼ばれる
+    /// JS から postMessage("editclone", { action: "importFCPXML", url: "...", filename: "...", token: "..." }) が呼ばれる
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
@@ -96,7 +95,9 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
         case "importFCPXML":
             guard let urlStr = body["url"] as? String,
                   let url = URL(string: urlStr) else { return }
-            downloadAndImportFCPXML(from: url, filename: body["filename"] as? String)
+            let token = body["token"] as? String
+            let filename = body["filename"] as? String
+            downloadAndImportFCPXML(from: url, filename: filename, token: token)
 
         case "openExternal":
             if let urlStr = body["url"] as? String, let url = URL(string: urlStr) {
@@ -108,30 +109,45 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
         }
     }
 
-    // MARK: FCPXML Import
+    // MARK: FCPXML Download
 
-    private func downloadAndImportFCPXML(from url: URL, filename: String?) {
+    private func downloadAndImportFCPXML(from url: URL, filename: String?, token: String?) {
         sendStatusToJS("FCPXMLをダウンロード中...")
 
-        let task = URLSession.shared.downloadTask(with: url) { [weak self] localURL, _, error in
+        var request = URLRequest(url: url)
+        // 認証トークンがある場合は Authorization ヘッダーをセット
+        if let token = token, !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        let task = URLSession.shared.downloadTask(with: request) { [weak self] localURL, response, error in
             guard let self = self else { return }
+
             if let error = error {
-                self.sendStatusToJS("エラー: \(error.localizedDescription)")
-                return
-            }
-            guard let localURL = localURL else {
-                self.sendStatusToJS("ダウンロード失敗")
+                self.sendStatusToJS("❌ ダウンロードエラー: \(error.localizedDescription)")
                 return
             }
 
+            // HTTP エラー確認（401 Unauthorized など）
+            if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+                self.sendStatusToJS("❌ サーバーエラー: HTTP \(http.statusCode)")
+                return
+            }
+
+            guard let localURL = localURL else {
+                self.sendStatusToJS("❌ ダウンロード失敗")
+                return
+            }
+
+            let destName = filename ?? "editclone.fcpxml"
             let destURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent(filename ?? "editclone.fcpxml")
+                .appendingPathComponent(destName)
 
             try? FileManager.default.removeItem(at: destURL)
             do {
                 try FileManager.default.moveItem(at: localURL, to: destURL)
             } catch {
-                self.sendStatusToJS("ファイル保存エラー: \(error.localizedDescription)")
+                self.sendStatusToJS("❌ ファイル保存エラー: \(error.localizedDescription)")
                 return
             }
 
@@ -142,26 +158,29 @@ class EditCloneWindowController: NSWindowController, WKNavigationDelegate, WKScr
         task.resume()
     }
 
+    // MARK: FCPXML Import into FCP
+
     private func importFCPXMLFile(at url: URL) {
         sendStatusToJS("Final Cut Pro にインポート中...")
 
-        // FCP Workflow Extension API でインポートをトリガー
-        // (実際のFCP Extension APIはApple Frameworkを使用)
-        // ここではFCPXMLをFCPに渡すためのURLスキームを使用
-        let fcpURL = URL(string: "fcpxml://open?path=\(url.path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")
-        if let fcpURL = fcpURL {
-            NSWorkspace.shared.open(fcpURL)
+        // .fcpxml は FCP がデフォルトハンドラーとして登録されている。
+        // NSWorkspace.open() で FCP が起動（または前面に来て）インポートダイアログが表示される。
+        let opened = NSWorkspace.shared.open(url)
+        if opened {
+            sendStatusToJS("✅ FCP にインポートしました！ライブラリを選択してください。")
+        } else {
+            // フォールバック: Finder でファイルをハイライト → 手動ドラッグ&ドロップを促す
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            sendStatusToJS("⚠️ FCP を開けませんでした。Finder 内のファイルを FCP にドラッグしてください。")
         }
-
-        // フォールバック: Finderでファイルを表示し、ユーザーにドラッグ&ドロップを促す
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-        sendStatusToJS("インポート完了！ FCPにドラッグ&ドロップしてください。")
     }
 
-    // MARK: JS Bridge helpers
+    // MARK: JS Bridge Helpers
 
     private func sendStatusToJS(_ message: String) {
-        let escaped = message.replacingOccurrences(of: "\"", with: "\\\"")
+        let escaped = message
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
         let js = "window.dispatchEvent(new CustomEvent('editclone-status', { detail: { message: \"\(escaped)\" } }));"
         DispatchQueue.main.async { [weak self] in
             self?.webView.evaluateJavaScript(js)

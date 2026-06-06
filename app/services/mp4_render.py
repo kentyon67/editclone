@@ -29,6 +29,19 @@ def _get_duration(video_path: Path) -> float:
         return 0.0
 
 
+def _pick_font(candidates: list[str]) -> str:
+    """インストール済みフォントを候補リストから選ぶ。fc-list が使えない場合は先頭を返す。"""
+    try:
+        result = subprocess.run(["fc-list"], capture_output=True, text=True, timeout=5)
+        installed = result.stdout.lower()
+        for font in candidates:
+            if font.lower() in installed:
+                return font
+    except Exception:
+        pass
+    return candidates[0]
+
+
 def _has_audio(video_path: Path) -> bool:
     result = subprocess.run(
         [_ffprobe(), "-v", "quiet", "-print_format", "json",
@@ -87,8 +100,10 @@ def add_subtitles_to_mp4(
         if len(srt_escaped) > 2 and srt_escaped[1] == ":":
             srt_escaped = srt_escaped[0] + "\\:" + srt_escaped[2:]
 
+        # フォント優先順: Noto Sans CJK JP → Noto Sans JP → DejaVu Sans（必ず存在）
+        font = _pick_font(["Noto Sans CJK JP", "Noto Sans JP", "DejaVu Sans", "Arial"])
         style = (
-            "Fontname=Noto Sans CJK JP,"
+            f"Fontname={font},"
             "Fontsize=28,"
             "PrimaryColour=&H00FFFFFF,"
             "OutlineColour=&H00000000,"
@@ -105,6 +120,7 @@ def add_subtitles_to_mp4(
             "-vf", f"subtitles='{srt_escaped}':force_style='{style}'",
             "-c:v", "libx264", "-crf", "18", "-preset", "fast",
             "-c:a", "copy",
+            "-movflags", "+faststart",
             str(output_path),
         ]
 
@@ -172,6 +188,7 @@ def render_mp4(video_path: Path, cuts: list[dict], output_path: Path) -> bool:
         *map_args,
         "-c:v", "libx264", "-crf", "18", "-preset", "fast",
         *audio_args,
+        "-movflags", "+faststart",
         str(output_path),
     ]
 

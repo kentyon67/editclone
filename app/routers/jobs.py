@@ -8,13 +8,22 @@ from app.services.jobs import JobStatus, get_job, list_user_jobs, _jobs
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
+def _get_owned_job(job_id: str, user: dict):
+    """ジョブを取得し、所有者を確認する。見つからない・権限なしの場合は 404。"""
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    if job.user_id and job.user_id != user["id"]:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return job
+
+
 @router.get("")
 def user_job_list(user: dict = Depends(require_user)):
     """ユーザーの最近20件のジョブ一覧（完了＋進行中）。"""
     completed = list_user_jobs(user["id"])
     completed_ids = {j.id for j in completed}
 
-    # メモリ上の進行中ジョブも含める（再起動後は消えるが処理中は表示する）
     in_progress = [
         j for j in _jobs.values()
         if j.user_id == user["id"]
@@ -43,16 +52,13 @@ def user_job_list(user: dict = Depends(require_user)):
 
 
 def _fetch_from_storage(path: str) -> bytes:
-    """Supabase Storage から results バケット経由でファイルを取得する。"""
     from app.services.storage import download_result
     return download_result(path)
 
 
 @router.get("/{job_id}")
-def job_status(job_id: str):
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+def job_status(job_id: str, user: dict = Depends(require_user)):
+    job = _get_owned_job(job_id, user)
 
     resp: dict = {
         "job_id": job.id,
@@ -83,6 +89,7 @@ def job_status(job_id: str):
 
 @router.get("/{job_id}/download")
 def job_download(job_id: str):
+    """ZIP ダウンロード（アンカータグ対応のため認証不要。UUID が推測困難なため十分なガード）。"""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
@@ -111,6 +118,7 @@ def job_download(job_id: str):
 
 @router.get("/{job_id}/mp4")
 def job_mp4(job_id: str):
+    """MP4 ダウンロード（アンカータグ対応のため認証不要）。"""
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")

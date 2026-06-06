@@ -66,7 +66,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const plugin = params.get("plugin") as PluginNLE;
+    // FCP は ?nle=fcp で起動、Premiere/DaVinci は ?plugin=... で起動（両方対応）
+    const plugin = (params.get("nle") || params.get("plugin")) as PluginNLE;
     if (plugin && ["fcp", "premiere", "davinci"].includes(plugin)) {
       setPluginMode(plugin);
     }

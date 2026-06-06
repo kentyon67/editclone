@@ -7,7 +7,8 @@
     "dashboard": "Dashboard",
     "styles": "Styles",
     "account": "Account",
-    "logout": "Logout"
+    "logout": "Logout",
+    "projects": "Projects"
   },
   "hero": {
     "badge": "Multi-NLE AI Editing Agent",
@@ -333,7 +334,12 @@
   },
   "projects": {
     "title": "Project Detail",
+    "listTitle": "Projects",
+    "listSubtitle": "History of all processed video projects",
+    "listEmpty": "No projects yet",
+    "listEmptySub": "Projects are created automatically when you process a video",
     "back": "Back to Dashboard",
+    "backToList": "Back to List",
     "notFound": "Project not found",
     "originalJob": "Original Job",
     "viewResults": "View Results",

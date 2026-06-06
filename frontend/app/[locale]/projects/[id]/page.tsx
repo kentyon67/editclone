@@ -220,10 +220,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       <main className="pt-24 pb-16 px-4 max-w-3xl mx-auto">
         {/* Back */}
         <Link
-          href={`/${locale}/dashboard`}
+          href={`/${locale}/projects`}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-600 transition-colors mb-6"
         >
-          <ArrowLeft className="w-4 h-4" /> {t("back")}
+          <ArrowLeft className="w-4 h-4" /> {t("backToList")}
         </Link>
 
         {/* Header */}
