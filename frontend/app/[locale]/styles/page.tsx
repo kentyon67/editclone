@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
   Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type, Dna, Store,
-  Globe, EyeOff,
+  Globe, EyeOff, TrendingUp,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -15,9 +15,10 @@ import {
   listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
   aiRefineProfile, getProfileStats,
   publishStyleProfile, unpublishStyleProfile,
+  getProfileAccuracy,
   ApiError,
   DEFAULT_CAPTION_STYLE,
-  type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle,
+  type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle, type ProfileAccuracy,
 } from "@/lib/api";
 
 type FormData = {
@@ -733,6 +734,93 @@ function ProfileCard({
       <ReferenceVideoSection profileId={profile.id} />
       <AiRefineSection profile={profile} onApply={onRefineApply} />
       <PublishSection profile={profile} onUpdate={onUpdate} />
+      <AccuracySection profileId={profile.id} />
+    </div>
+  );
+}
+
+function AccuracySection({ profileId }: { profileId: string }) {
+  const [open, setOpen] = useState(false);
+  const [accuracy, setAccuracy] = useState<ProfileAccuracy | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const data = await getProfileAccuracy(profileId);
+      setAccuracy(data);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleToggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !accuracy) load();
+  }
+
+  const trendColor =
+    accuracy?.trend === "improving" ? "text-green-600" :
+    accuracy?.trend === "declining" ? "text-red-500" :
+    "text-gray-500";
+  const trendLabel =
+    accuracy?.trend === "improving" ? "↑ 改善中" :
+    accuracy?.trend === "declining" ? "↓ 低下傾向" :
+    "→ 安定";
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="flex items-center justify-between w-full text-xs text-gray-400 hover:text-purple-600 transition-colors"
+      >
+        <span className="flex items-center gap-1.5">
+          <TrendingUp className="w-3.5 h-3.5" />
+          精度メトリクス
+          {accuracy && (
+            <span className={`ml-1.5 font-semibold ${trendColor}`}>{trendLabel}</span>
+          )}
+        </span>
+        {open ? <ChevronDown className="w-3.5 h-3.5 rotate-180 transition-transform" /> : <ChevronDown className="w-3.5 h-3.5 transition-transform" />}
+      </button>
+
+      {open && (
+        <div className="mt-2 bg-gray-50 rounded-xl p-3">
+          {loading ? (
+            <div className="flex justify-center py-2">
+              <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+            </div>
+          ) : !accuracy || accuracy.total_feedback === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-1">フィードバックがまだありません</p>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">総accept率</span>
+                <span className="font-bold text-gray-800">
+                  {(accuracy.overall_accept_rate * 100).toFixed(0)}%
+                  <span className="text-gray-400 font-normal ml-1">({accuracy.total_feedback}件)</span>
+                </span>
+              </div>
+              {accuracy.weeks.slice(-6).map((w) => (
+                <div key={w.week} className="flex items-center gap-2 text-[10px]">
+                  <span className="text-gray-400 w-14 flex-shrink-0">{w.week}</span>
+                  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-400 rounded-full"
+                      style={{ width: `${(w.accept_rate * 100).toFixed(0)}%` }}
+                    />
+                  </div>
+                  <span className="text-gray-500 w-8 text-right">
+                    {(w.accept_rate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

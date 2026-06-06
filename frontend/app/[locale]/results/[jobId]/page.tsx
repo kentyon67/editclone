@@ -5,11 +5,11 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers
+  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers, Wand2
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, API_URL, JobStatusResponse, postFeedback, type Project } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, getBrollSuggestions, API_URL, JobStatusResponse, postFeedback, type Project, type BrollSuggestion } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -134,6 +134,8 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [linkedProject, setLinkedProject] = useState<Project | null>(null);
   const [pluginStatus, setPluginStatus] = useState<{ message: string; success: boolean } | null>(null);
+  const [brollSuggestions, setBrollSuggestions] = useState<BrollSuggestion[] | null>(null);
+  const [loadingBroll, setLoadingBroll] = useState(false);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -392,6 +394,61 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
               </button>
             </div>
             <p className="text-sm text-gray-500">{t("srt.description")}</p>
+          </div>
+        )}
+      </div>
+
+      {/* B-roll 提案 */}
+      <div className="mt-4 bg-white border border-gray-100 rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Film className="w-4 h-4 text-blue-500" />
+            <span className="font-bold text-gray-900 text-sm">B-roll 提案</span>
+          </div>
+          {brollSuggestions === null && (
+            <button
+              onClick={async () => {
+                setLoadingBroll(true);
+                try {
+                  const data = await getBrollSuggestions(job.job_id);
+                  setBrollSuggestions(data.suggestions);
+                } catch {
+                  setBrollSuggestions([]);
+                } finally {
+                  setLoadingBroll(false);
+                }
+              }}
+              disabled={loadingBroll}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {loadingBroll ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+              {loadingBroll ? "生成中..." : "AI で提案生成"}
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-3">トランスクリプトを分析してB-roll挿入ポイントを提案します。</p>
+        {brollSuggestions !== null && brollSuggestions.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-2">提案はありませんでした</p>
+        )}
+        {brollSuggestions !== null && brollSuggestions.length > 0 && (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {brollSuggestions.map((s, i) => (
+              <div key={i} className="flex gap-3 items-start p-2.5 rounded-xl bg-blue-50 border border-blue-100">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 mt-0.5 ${
+                  s.priority === "high" ? "bg-red-100 text-red-600" :
+                  s.priority === "medium" ? "bg-yellow-100 text-yellow-700" :
+                  "bg-gray-100 text-gray-500"
+                }`}>{s.priority === "high" ? "高" : s.priority === "medium" ? "中" : "低"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-mono text-blue-600 flex-shrink-0">{fmtTime(s.start)}</span>
+                    <span className="text-xs font-semibold text-gray-800 truncate">{s.keyword}</span>
+                    <span className="text-[10px] text-gray-400 flex-shrink-0">{s.b_roll_type}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">{s.description}</p>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

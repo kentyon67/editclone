@@ -117,8 +117,11 @@
 | マーケット評価・レビュー（星評価・分布） | ✅ | `app/services/style_profiles.py`, `frontend/app/[locale]/styles/marketplace/` |
 | パーソナライズ精度の定量評価（週次accept率・トレンド） | ✅ | `app/services/style_profiles.py`, `GET /style-profiles/{id}/accuracy` |
 | チーム招待・権限管理（Studio プラン） | ✅ | `app/services/teams.py`, `app/routers/teams.py`, `frontend/app/[locale]/account/` |
-| 外部 API 公開 | ⏳ | 未実装 |
-| Webhook 連携 | ⏳ | 未実装 |
+| チーム招待承認ページ | ✅ | `frontend/app/[locale]/teams/invite/[token]/` |
+| 精度メトリクスUI（週次accept率グラフ） | ✅ | `frontend/app/[locale]/styles/` AccuracySection |
+| B-roll 提案UI（resultsページ表示） | ✅ | `frontend/app/[locale]/results/[jobId]/` |
+| 外部 API 公開（APIキー管理） | ✅ | `app/services/api_keys.py`, `app/routers/api_keys.py`, `GET/POST/DELETE /api-keys` |
+| Webhook 連携（job.completed/failed） | ✅ | `app/services/webhooks.py`, `app/routers/webhooks.py`, HMAC署名付き配信 |
 
 ---
 

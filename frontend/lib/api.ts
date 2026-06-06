@@ -709,3 +709,89 @@ export async function acceptTeamInvite(token: string): Promise<{ accepted: boole
   if (!res.ok) return handleError(res, "Accept invite failed");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// 外部APIキー管理 (Phase 6-4: 外部API公開)
+// ---------------------------------------------------------------------------
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  revoked: boolean;
+  last_used_at: string | null;
+  created_at: string;
+  raw_key?: string;
+}
+
+export async function listApiKeys(): Promise<ApiKey[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api-keys`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.api_keys ?? [];
+}
+
+export async function createApiKey(name: string): Promise<ApiKey> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api-keys`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) return handleError(res, "API key creation failed");
+  return res.json();
+}
+
+export async function revokeApiKey(keyId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/api-keys/${keyId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "API key revocation failed");
+}
+
+// ---------------------------------------------------------------------------
+// Webhook管理 (Phase 6-4: Webhook連携)
+// ---------------------------------------------------------------------------
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  created_at: string;
+  secret?: string;
+}
+
+export async function listWebhooks(): Promise<Webhook[]> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/webhooks`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.webhooks ?? [];
+}
+
+export async function createWebhook(
+  url: string,
+  events: string[] = ["job.completed", "job.failed"],
+): Promise<Webhook> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/webhooks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ url, events }),
+  });
+  if (!res.ok) return handleError(res, "Webhook creation failed");
+  return res.json();
+}
+
+export async function deleteWebhook(webhookId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/webhooks/${webhookId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "Webhook deletion failed");
+}

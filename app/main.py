@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.routers import billing, jobs, plugin, projects, style_profiles, teams, usage, videos
+from app.routers import api_keys, billing, jobs, plugin, projects, style_profiles, teams, usage, videos, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,8 @@ app.include_router(plugin.router)
 app.include_router(style_profiles.router)
 app.include_router(projects.router)
 app.include_router(teams.router)
+app.include_router(api_keys.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health")

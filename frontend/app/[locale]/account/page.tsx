@@ -2,13 +2,15 @@
 import { useTranslations, useLocale } from "next-intl";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, CreditCard, LogOut, ChevronRight, Film, Loader2, Plug, Copy, Check, Users, UserPlus, X, Mail, Shield } from "lucide-react";
+import { User, CreditCard, LogOut, ChevronRight, Film, Loader2, Plug, Copy, Check, Users, UserPlus, X, Mail, Shield, Key, Webhook, Plus, Trash2, ExternalLink } from "lucide-react";
 import Header from "@/components/Header";
 import { createClient } from "@/lib/supabase";
 import {
   getUserUsage, getBillingPortal,
   getTeam, inviteTeamMember, removeTeamMember,
-  type UsageResponse, type TeamMember,
+  listApiKeys, createApiKey, revokeApiKey,
+  listWebhooks, createWebhook, deleteWebhook,
+  type UsageResponse, type TeamMember, type ApiKey, type Webhook as WebhookType,
 } from "@/lib/api";
 
 const PLANS = [
@@ -27,6 +29,18 @@ export default function AccountPage() {
   const [token, setToken] = useState<string>("");
   const [tokenCopied, setTokenCopied] = useState(false);
   const [loadingPortal, setLoadingPortal] = useState(false);
+  // API key state
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [creatingKey, setCreatingKey] = useState(false);
+  const [newRawKey, setNewRawKey] = useState("");
+  const [newKeyCopied, setNewKeyCopied] = useState(false);
+  // Webhook state
+  const [webhooks, setWebhooks] = useState<WebhookType[]>([]);
+  const [newWebhookUrl, setNewWebhookUrl] = useState("");
+  const [creatingWebhook, setCreatingWebhook] = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [webhookSecretCopied, setWebhookSecretCopied] = useState(false);
   // Team state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -49,6 +63,8 @@ export default function AccountPage() {
         getTeam().then((d) => setTeamMembers(d.my_team.members)).catch(() => {});
       }
     }).catch(() => {});
+    listApiKeys().then(setApiKeys).catch(() => {});
+    listWebhooks().then(setWebhooks).catch(() => {});
   }, []);
 
   async function handleInvite() {
@@ -77,6 +93,42 @@ export default function AccountPage() {
     } catch {
       // silent
     }
+  }
+
+  async function handleCreateApiKey() {
+    if (!newKeyName.trim()) return;
+    setCreatingKey(true);
+    try {
+      const key = await createApiKey(newKeyName.trim());
+      setApiKeys((prev) => [key, ...prev]);
+      setNewRawKey(key.raw_key ?? "");
+      setNewKeyName("");
+    } catch { /* silent */ } finally {
+      setCreatingKey(false);
+    }
+  }
+
+  async function handleRevokeApiKey(id: string) {
+    await revokeApiKey(id).catch(() => {});
+    setApiKeys((prev) => prev.filter((k) => k.id !== id));
+  }
+
+  async function handleCreateWebhook() {
+    if (!newWebhookUrl.trim()) return;
+    setCreatingWebhook(true);
+    try {
+      const wh = await createWebhook(newWebhookUrl.trim());
+      setWebhooks((prev) => [wh, ...prev]);
+      setWebhookSecret(wh.secret ?? "");
+      setNewWebhookUrl("");
+    } catch { /* silent */ } finally {
+      setCreatingWebhook(false);
+    }
+  }
+
+  async function handleDeleteWebhook(id: string) {
+    await deleteWebhook(id).catch(() => {});
+    setWebhooks((prev) => prev.filter((w) => w.id !== id));
   }
 
   async function handleLogout() {
@@ -226,6 +278,169 @@ export default function AccountPage() {
                 {tokenCopied ? t("copied") : t("copy")}
               </button>
             </div>
+          </div>
+
+          {/* API Keys */}
+          <div className="bg-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-gray-700 rounded-xl flex items-center justify-center">
+                <Key className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900">外部APIキー</h2>
+                <p className="text-xs text-gray-400">スクリプト・外部ツールからAPI呼び出しに使用</p>
+              </div>
+            </div>
+
+            {/* 新規作成フォーム */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                placeholder="キー名（例: my-script）"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateApiKey()}
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
+              />
+              <button
+                onClick={handleCreateApiKey}
+                disabled={creatingKey || !newKeyName.trim()}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {creatingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                生成
+              </button>
+            </div>
+
+            {/* 生成直後のキー表示 */}
+            {newRawKey && (
+              <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <p className="text-xs text-yellow-700 font-medium mb-1.5">このキーは一度だけ表示されます。必ずコピーしてください。</p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={newRawKey}
+                    className="flex-1 px-2 py-1.5 text-xs font-mono bg-white border border-yellow-200 rounded-lg select-all text-gray-700"
+                  />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(newRawKey);
+                      setNewKeyCopied(true);
+                      setTimeout(() => { setNewKeyCopied(false); setNewRawKey(""); }, 3000);
+                    }}
+                    className="px-2.5 py-1.5 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    {newKeyCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* キー一覧 */}
+            {apiKeys.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">APIキーがありません</p>
+            ) : (
+              <div className="space-y-2">
+                {apiKeys.map((k) => (
+                  <div key={k.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{k.name}</p>
+                      <p className="text-xs text-gray-400 font-mono">{k.key_prefix}...</p>
+                    </div>
+                    <button
+                      onClick={() => handleRevokeApiKey(k.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="キーを無効化"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Webhooks */}
+          <div className="bg-white rounded-2xl p-6 border border-gray-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center">
+                <Webhook className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900">Webhook</h2>
+                <p className="text-xs text-gray-400">ジョブ完了・失敗時に指定URLへHTTP POSTを送信</p>
+              </div>
+            </div>
+
+            {/* 新規登録フォーム */}
+            <div className="flex gap-2 mb-3">
+              <input
+                type="url"
+                placeholder="https://your-server.com/webhook"
+                value={newWebhookUrl}
+                onChange={(e) => setNewWebhookUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateWebhook()}
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-purple-400"
+              />
+              <button
+                onClick={handleCreateWebhook}
+                disabled={creatingWebhook || !newWebhookUrl.trim()}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {creatingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                追加
+              </button>
+            </div>
+
+            {/* シークレット表示 */}
+            {webhookSecret && (
+              <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
+                <p className="text-xs text-orange-700 font-medium mb-1.5">署名シークレット（一度だけ表示）。X-EditClone-Signature ヘッダーで検証できます。</p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={webhookSecret}
+                    className="flex-1 px-2 py-1.5 text-xs font-mono bg-white border border-orange-200 rounded-lg select-all text-gray-700"
+                  />
+                  <button
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(webhookSecret);
+                      setWebhookSecretCopied(true);
+                      setTimeout(() => { setWebhookSecretCopied(false); setWebhookSecret(""); }, 3000);
+                    }}
+                    className="px-2.5 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    {webhookSecretCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Webhook一覧 */}
+            {webhooks.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">Webhookが登録されていません</p>
+            ) : (
+              <div className="space-y-2">
+                {webhooks.map((w) => (
+                  <div key={w.id} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-mono text-gray-700 truncate">{w.url}</p>
+                      <p className="text-[10px] text-gray-400">{w.events.join(", ")}</p>
+                    </div>
+                    <a href={w.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors">
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      onClick={() => handleDeleteWebhook(w.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Team Management — Studio only */}

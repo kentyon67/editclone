@@ -471,6 +471,20 @@ def run_job(job_id: str) -> None:
         job.progress = "完了"
         _persist_to_supabase(job)
 
+        # Phase 6-4: Webhook 配信（ジョブ完了）
+        if job.user_id:
+            try:
+                from app.services.webhooks import trigger_webhooks
+                trigger_webhooks(job.user_id, "job.completed", {
+                    "job_id": job.id,
+                    "video_id": job.video_id,
+                    "video_filename": job.video_filename,
+                    "cut_count": len(cuts),
+                    "has_mp4": mp4_bytes is not None,
+                })
+            except Exception:
+                pass
+
         # Phase 3: プロジェクト自動作成
         if job.user_id:
             try:
@@ -513,3 +527,15 @@ def run_job(job_id: str) -> None:
             metadata={"error": str(exc)},
         )
         _persist_to_supabase(job)
+
+        # Phase 6-4: Webhook 配信（ジョブ失敗）
+        if job.user_id:
+            try:
+                from app.services.webhooks import trigger_webhooks
+                trigger_webhooks(job.user_id, "job.failed", {
+                    "job_id": job.id,
+                    "video_id": job.video_id,
+                    "error": str(exc),
+                })
+            except Exception:
+                pass

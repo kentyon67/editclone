@@ -88,6 +88,7 @@
 
 **完了済み（追加）:**
 - [x] B-roll 提案（Claude API トランスクリプト分析 → 挿入ポイント + キーワード提案）
+- [x] B-roll 提案 UI（Results ページにインライン表示・優先度バッジ・タイムスタンプ）
 
 ---
 
@@ -173,8 +174,9 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 - [x] チーム招待・権限管理（Studio プラン: 招待・承認・削除・ロール管理）
 - [x] チームスタイルプロファイル共有（チームオーナーのプロファイルをメンバーが利用可能）
-- [ ] 外部 API 公開
-- [ ] Webhook 連携
+- [x] チーム招待承認ページ（/teams/invite/{token} — メールアドレス検証・エラーハンドリング）
+- [x] 外部 API 公開（APIキー管理: eck_プレフィックス・SHA256ハッシュ保管・X-Api-Keyヘッダー認証）
+- [x] Webhook 連携（job.completed/job.failed イベント・HMAC-SHA256シグネチャ付き配信）
 
 ---
 
@@ -189,3 +191,4 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 | 2026-06-06 | 2.2.0 | Phase 4 ズーム演出・Phase 6-2 Plugin revision学習・Phase 6-3 マーケットプレイス基盤 |
 | 2026-06-06 | 2.3.0 | Phase 5 Plugin Agent化完了: Premiere UXP 3タブAgent・DaVinci Agent GUI・FCP Agentブリッジ・Plugin API拡張 |
 | 2026-06-06 | 2.4.0 | Phase 4完了: B-roll提案（Claude API）。Phase 6-2: 精度メトリクス（週次accept率・トレンド）。Phase 6-3: 星評価・レビューシステム。Phase 6-4: チーム招待・Studio権限管理。Schema v7 |
+| 2026-06-06 | 2.5.0 | Phase 6-4完全完了: 外部APIキー管理（eck_プレフィックス・X-Api-Key認証）・Webhook連携（HMAC署名）・チーム招待承認ページ。B-roll UI（Resultsページ）。精度メトリクスUI（Stylesページ）。Schema v8 |

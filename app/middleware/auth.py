@@ -35,10 +35,22 @@ async def get_current_user(authorization: Optional[str] = Header(default=None)) 
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-async def require_user(authorization: Optional[str] = Header(default=None)) -> dict:
-    """認証必須。未認証なら401を返す。ローカル開発ではダミーユーザーを返す。"""
+async def require_user(
+    authorization: Optional[str] = Header(default=None),
+    x_api_key: Optional[str] = Header(default=None, alias="x-api-key"),
+) -> dict:
+    """認証必須。JWT または X-Api-Key ヘッダーで認証。ローカル開発ではダミーユーザーを返す。"""
     if not AUTH_ENABLED:
         return {"id": "dev-user", "email": "dev@localhost"}
+
+    # API キー認証（外部ツール・スクリプト向け）
+    if x_api_key:
+        from app.services.api_keys import validate_api_key
+        api_user = validate_api_key(x_api_key)
+        if api_user:
+            return api_user
+
+    # JWT 認証（Web フロントエンド向け）
     user = await get_current_user(authorization)
     if user is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
