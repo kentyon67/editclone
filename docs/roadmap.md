@@ -83,8 +83,11 @@
 - [x] 画像・写真スライドショー動画化（POST /videos/slideshow + /upload/slideshow UI）
 - [x] DaVinci Script に tkinter GUI 設定追加（初回起動時にダイアログ）
 
+**追加完了:**
+- [x] ズーム演出（subtle 5% / punch 10% 中央クロップズームイン）
+
 **残タスク:**
-- [ ] ズーム演出・B-roll 提案
+- [ ] B-roll 提案
 
 ---
 
@@ -137,15 +140,19 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 - [x] 採用 / 却下データの蓄積（feedback_logs テーブル）
 - [x] フィードバック 5 件ごとの自動プロンプト改善（record_feedback → _auto_refine_profile）
-- [ ] Plugin 修正データの Style Profile 反映（revision diff 分析）
+- [x] Plugin revision diff → フィードバック自動記録（`_learn_from_plugin_revision`）
 - [ ] パーソナライズ精度の定量評価（before/after 比較メトリクス）
 
-### 6-3. Style Marketplace
+### 6-3. Style Marketplace ✅（基盤完了）
 
-- [ ] Style Profile 公開 / 販売
-- [ ] 購入・評価・レビュー
-- [ ] クリエイター収益分配
-- [ ] ジャンル別ランキング
+- [x] Style Profile 公開 / 非公開切替（POST /{id}/publish, unpublish）
+- [x] 公開プロファイル閲覧（GET /marketplace, タグフィルタ）
+- [x] プロファイルコピー（POST /marketplace/{id}/copy）
+- [x] タグ付け（YouTube, TikTok, Podcast など 10 種類）
+- [x] copy_count によるランキング
+- [x] フロントエンド マーケットプレイスページ（/styles/marketplace）
+- [ ] 購入・評価・レビュー（将来: Creator 収益分配）
+- [ ] ジャンル別ランキング強化
 
 ### 6-4. チーム・API
 
@@ -163,3 +170,4 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 | 2026-06-04 | 1.0.0 | 6 フェーズ構成に改定 |
 | 2026-06-06 | 2.0.0 | Phase 1-4 完了・Phase 5 コード完了を反映。残タスクを明確化 |
 | 2026-06-06 | 2.1.0 | Phase 4 完了（スライドショー）・Phase 6 着手（編集DNA・自動学習） |
+| 2026-06-06 | 2.2.0 | Phase 4 ズーム演出・Phase 6-2 Plugin revision学習・Phase 6-3 マーケットプレイス基盤 |

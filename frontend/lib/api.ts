@@ -181,6 +181,7 @@ export interface CaptionStyle {
   primary_color: string;
   outline_color: string;
   bold: boolean;
+  zoom_effect?: "none" | "subtle" | "punch";
 }
 
 export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
@@ -189,6 +190,7 @@ export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   primary_color: "#FFFFFF",
   outline_color: "#000000",
   bold: true,
+  zoom_effect: "none",
 };
 
 export interface StyleProfile {
@@ -202,8 +204,58 @@ export interface StyleProfile {
   caption_style: CaptionStyle | null;
   is_active: boolean;
   job_count: number;
+  is_public?: boolean;
+  public_description?: string;
+  copy_count?: number;
+  tags?: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface PublicStyleProfile extends Omit<StyleProfile, "is_active" | "job_count" | "updated_at"> {
+  copy_count: number;
+  tags: string[];
+}
+
+export async function listMarketplaceProfiles(tag?: string): Promise<{ profiles: PublicStyleProfile[] }> {
+  const headers = await authHeaders();
+  const url = tag
+    ? `${API_URL}/style-profiles/marketplace?tag=${encodeURIComponent(tag)}`
+    : `${API_URL}/style-profiles/marketplace`;
+  const res = await fetch(url, { headers });
+  if (!res.ok) return { profiles: [] };
+  return res.json();
+}
+
+export async function copyMarketplaceProfile(profileId: string, newName?: string): Promise<StyleProfile> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/marketplace/${profileId}/copy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ new_name: newName || "" }),
+  });
+  if (!res.ok) return handleError(res, "Copy profile failed");
+  return res.json();
+}
+
+export async function publishStyleProfile(profileId: string, publicDescription: string, tags: string[]): Promise<StyleProfile> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ public_description: publicDescription, tags }),
+  });
+  if (!res.ok) return handleError(res, "Publish profile failed");
+  return res.json();
+}
+
+export async function unpublishStyleProfile(profileId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/unpublish`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "Unpublish profile failed");
 }
 
 export async function listStyleProfiles(): Promise<{ profiles: StyleProfile[] }> {

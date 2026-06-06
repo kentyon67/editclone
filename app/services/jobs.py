@@ -355,14 +355,16 @@ def run_job(job_id: str) -> None:
         job.progress = "字幕ファイル生成中..."
         srt_content = segments_to_srt(transcript["segments"])
 
-        # アクティブな Style Profile からテロップスタイルを事前取得（全出力に使用）
+        # アクティブな Style Profile からテロップスタイル + ズームエフェクトを取得
         caption_style: dict | None = None
+        zoom_effect: str = "none"
         if job.user_id:
             try:
                 from app.services.style_profiles import get_active_profile
                 active = get_active_profile(job.user_id)
                 if active and active.get("caption_style"):
                     caption_style = active["caption_style"]
+                    zoom_effect = str(caption_style.get("zoom_effect", "none") or "none")
             except Exception:
                 pass
 
@@ -395,7 +397,7 @@ def run_job(job_id: str) -> None:
                 tmpdir_path = Path(tmpdir)
 
                 cut_mp4_path = tmpdir_path / f"{job.video_id}_cut.mp4"
-                cut_ok = render_mp4(path, cuts, cut_mp4_path) and cut_mp4_path.exists()
+                cut_ok = render_mp4(path, cuts, cut_mp4_path, zoom_effect=zoom_effect) and cut_mp4_path.exists()
 
                 if cut_ok:
                     remapped_segs = remap_segments_for_cuts(

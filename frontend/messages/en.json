@@ -324,6 +324,10 @@
       "captionOutlineColor": "Outline color",
       "captionBold": "Bold",
       "captionPreviewText": "Sample caption text",
+      "zoomEffect": "Zoom Effect",
+      "zoomNone": "None",
+      "zoomSubtle": "Subtle (5%)",
+      "zoomPunch": "Punch (10%)",
       "save": "Save",
       "cancel": "Cancel",
       "create": "Create"
@@ -389,6 +393,12 @@
     "generate": "Create Slideshow",
     "downloadMp4": "Download MP4",
     "generating2": "Generating slideshow MP4..."
+  },
+  "marketplace": {
+    "title": "Style Marketplace",
+    "subtitle": "Browse and copy style profiles shared by other creators",
+    "empty": "No public profiles yet",
+    "emptyHint": "Share your style profile from the Styles page to get started"
   },
   "projects": {
     "title": "Project Detail",

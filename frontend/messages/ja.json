@@ -324,6 +324,10 @@
       "captionOutlineColor": "縁取り色",
       "captionBold": "太字",
       "captionPreviewText": "テロップのプレビュー",
+      "zoomEffect": "ズームエフェクト",
+      "zoomNone": "なし",
+      "zoomSubtle": "ゆっくり（5%）",
+      "zoomPunch": "パンチ（10%）",
       "save": "保存",
       "cancel": "キャンセル",
       "create": "作成"
@@ -389,6 +393,12 @@
     "generate": "スライドショーを生成",
     "downloadMp4": "MP4をダウンロード",
     "generating2": "スライドショーMP4を生成しています..."
+  },
+  "marketplace": {
+    "title": "スタイルマーケットプレイス",
+    "subtitle": "他のユーザーが公開したスタイルプロファイルを閲覧・コピーできます",
+    "empty": "まだ公開されたプロファイルがありません",
+    "emptyHint": "スタイルページからプロファイルを公開してみましょう"
   },
   "projects": {
     "title": "プロジェクト詳細",

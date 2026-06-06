@@ -51,6 +51,34 @@ def _pick_font(candidates: list[str]) -> str:
     return candidates[0]
 
 
+def _get_video_dimensions(video_path: Path) -> tuple[int, int]:
+    result = subprocess.run(
+        [_ffprobe(), "-v", "quiet", "-print_format", "json",
+         "-show_streams", "-select_streams", "v:0", str(video_path)],
+        capture_output=True, text=True, timeout=30,
+    )
+    try:
+        streams = json.loads(result.stdout).get("streams", [])
+        if streams:
+            return int(streams[0]["width"]), int(streams[0]["height"])
+    except Exception:
+        pass
+    return 1920, 1080
+
+
+def _zoom_filter(zoom_effect: str, w: int, h: int) -> str:
+    """ズームエフェクトの ffmpeg フィルター文字列を返す。不要なら空文字。
+    scale で拡大してから crop で元サイズに戻す方式 — 全セグメントが同一解像度になる。
+    """
+    zoom_map = {"subtle": 1.05, "punch": 1.10}
+    zoom = zoom_map.get(zoom_effect)
+    if zoom is None:
+        return ""
+    scaled_w = int(w * zoom / 2) * 2  # ffmpeg は偶数解像度を要求する
+    scaled_h = int(h * zoom / 2) * 2
+    return f"scale={scaled_w}:{scaled_h},crop={w}:{h}:(iw-{w})/2:(ih-{h})/2"
+
+
 def _has_audio(video_path: Path) -> bool:
     result = subprocess.run(
         [_ffprobe(), "-v", "quiet", "-print_format", "json",
@@ -152,7 +180,7 @@ def add_subtitles_to_mp4(
             pass
 
 
-def render_mp4(video_path: Path, cuts: list[dict], output_path: Path) -> bool:
+def render_mp4(video_path: Path, cuts: list[dict], output_path: Path, zoom_effect: str = "none") -> bool:
     """
     silence cuts を除いた MP4 を output_path に生成する。
     成功なら True、失敗なら False を返す。
@@ -177,11 +205,16 @@ def render_mp4(video_path: Path, cuts: list[dict], output_path: Path) -> bool:
 
     has_audio = _has_audio(video_path)
     n = len(keep_segs)
+    w, h = _get_video_dimensions(video_path)
+    zoom_f = _zoom_filter(zoom_effect, w, h)
 
     # filter_complex 構築
     parts: list[str] = []
     for i, (s, e) in enumerate(keep_segs):
-        parts.append(f"[0:v]trim=start={s}:end={e},setpts=PTS-STARTPTS[v{i}]")
+        v_chain = f"trim=start={s}:end={e},setpts=PTS-STARTPTS"
+        if zoom_f:
+            v_chain += f",{zoom_f}"
+        parts.append(f"[0:v]{v_chain}[v{i}]")
         if has_audio:
             parts.append(f"[0:a]atrim=start={s}:end={e},asetpts=PTS-STARTPTS[a{i}]")
 

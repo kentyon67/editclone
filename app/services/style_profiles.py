@@ -1,6 +1,7 @@
 """
-Style Profile CRUD — ユーザーの編集スタイルを保存・管理する。
+Style Profile CRUD + Marketplace — ユーザーの編集スタイルを保存・管理・公開する。
 """
+import datetime
 import logging
 from typing import Optional
 
@@ -92,7 +93,8 @@ def create_profile(user_id: str, data: dict) -> Optional[dict]:
 
 
 def update_profile(profile_id: str, user_id: str, data: dict) -> Optional[dict]:
-    allowed = {"name", "description", "noise_db", "min_silence_seconds", "default_prompt", "caption_style"}
+    allowed = {"name", "description", "noise_db", "min_silence_seconds", "default_prompt", "caption_style",
+               "is_public", "public_description", "tags"}
     payload = {k: v for k, v in data.items() if k in allowed}
     if not payload:
         return get_profile(profile_id, user_id)
@@ -302,6 +304,119 @@ def delete_reference_video(video_id: str, profile_id: str, user_id: str) -> bool
 # ---------------------------------------------------------------------------
 # AI Profile Refinement (Phase 2)
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Style Marketplace (Phase 6-3)
+# ---------------------------------------------------------------------------
+
+_MARKETPLACE_SELECT = (
+    "id,name,description,public_description,noise_db,min_silence_seconds,"
+    "default_prompt,caption_style,copy_count,tags,user_id,created_at"
+)
+
+_VALID_TAGS = {
+    "YouTube", "TikTok", "Podcast", "Interview", "Tutorial",
+    "Vlog", "Talk", "Documentary", "SNS", "Business",
+}
+
+
+def list_public_profiles(limit: int = 30, tag: Optional[str] = None) -> list[dict]:
+    """公開中のスタイルプロファイルを人気順（copy_count降順）で返す。"""
+    try:
+        query = (
+            _client().table("style_profiles")
+            .select(_MARKETPLACE_SELECT)
+            .eq("is_public", True)
+            .order("copy_count", desc=True)
+            .limit(limit)
+        )
+        if tag and tag in _VALID_TAGS:
+            query = query.contains("tags", [tag])
+        return query.execute().data or []
+    except Exception as e:
+        logger.warning("list_public_profiles failed: %s", e)
+        return []
+
+
+def get_public_profile(profile_id: str) -> Optional[dict]:
+    """公開プロファイルを1件取得する（誰でも閲覧可能）。"""
+    try:
+        resp = (
+            _client().table("style_profiles")
+            .select(_MARKETPLACE_SELECT)
+            .eq("id", profile_id)
+            .eq("is_public", True)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("get_public_profile failed: %s", e)
+        return None
+
+
+def publish_profile(profile_id: str, user_id: str, public_description: str = "", tags: list[str] | None = None) -> Optional[dict]:
+    """プロファイルをマーケットプレイスに公開する。"""
+    safe_tags = [t for t in (tags or []) if t in _VALID_TAGS]
+    try:
+        resp = (
+            _client().table("style_profiles")
+            .update({
+                "is_public": True,
+                "public_description": public_description[:500],
+                "tags": safe_tags,
+                "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            })
+            .eq("id", profile_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("publish_profile failed: %s", e)
+        return None
+
+
+def unpublish_profile(profile_id: str, user_id: str) -> bool:
+    """プロファイルをマーケットプレイスから非公開にする。"""
+    try:
+        _client().table("style_profiles").update({
+            "is_public": False,
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }).eq("id", profile_id).eq("user_id", user_id).execute()
+        return True
+    except Exception as e:
+        logger.warning("unpublish_profile failed: %s", e)
+        return False
+
+
+def copy_public_profile(source_id: str, user_id: str, new_name: str = "") -> Optional[dict]:
+    """公開プロファイルを自分のプロファイルとしてコピーする。"""
+    source = get_public_profile(source_id)
+    if source is None:
+        raise ValueError("公開プロファイルが見つかりません")
+
+    name = new_name.strip() or f"{source['name']} (コピー)"
+    new_profile = create_profile(user_id, {
+        "name": name[:80],
+        "description": source.get("description", ""),
+        "noise_db": source.get("noise_db", -30.0),
+        "min_silence_seconds": source.get("min_silence_seconds", 0.5),
+        "default_prompt": source.get("default_prompt", ""),
+        "caption_style": source.get("caption_style"),
+    })
+
+    # copy_count を原子的にインクリメント
+    try:
+        current = int(source.get("copy_count") or 0)
+        _client().table("style_profiles").update(
+            {"copy_count": current + 1}
+        ).eq("id", source_id).execute()
+    except Exception:
+        pass
+
+    return new_profile
+
 
 def ai_refine_profile(profile_id: str, user_id: str) -> str:
     """フィードバック履歴と参考動画をもとに Claude がプロンプト改善を提案する。"""

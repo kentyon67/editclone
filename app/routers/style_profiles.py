@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 from app.middleware.auth import require_user
 from app.services import style_profiles as svc
@@ -18,6 +18,7 @@ class CaptionStyle(BaseModel):
     primary_color: str = Field("#FFFFFF", pattern="^#[0-9A-Fa-f]{6}$")
     outline_color: str = Field("#000000", pattern="^#[0-9A-Fa-f]{6}$")
     bold: bool = True
+    zoom_effect: Optional[str] = Field("none", pattern="^(none|subtle|punch)$")
 
 
 class ProfileCreate(BaseModel):
@@ -213,6 +214,67 @@ async def analyze_edit_pair(
             raise HTTPException(status_code=500, detail=f"分析に失敗しました: {e}")
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Style Marketplace (Phase 6-3)
+# ---------------------------------------------------------------------------
+
+class PublishBody(BaseModel):
+    public_description: str = Field("", max_length=500)
+    tags: List[str] = []
+
+
+class CopyProfileBody(BaseModel):
+    new_name: str = Field("", max_length=80)
+
+
+@router.get("/marketplace")
+def get_marketplace(tag: Optional[str] = None, user: dict = Depends(require_user)):
+    """公開中のスタイルプロファイル一覧を返す。"""
+    return {"profiles": svc.list_public_profiles(limit=50, tag=tag)}
+
+
+@router.get("/marketplace/{profile_id}")
+def get_marketplace_profile(profile_id: str, user: dict = Depends(require_user)):
+    profile = svc.get_public_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="公開プロファイルが見つかりません")
+    return profile
+
+
+@router.post("/marketplace/{profile_id}/copy")
+def copy_marketplace_profile(
+    profile_id: str,
+    body: CopyProfileBody,
+    user: dict = Depends(require_user),
+):
+    """公開プロファイルを自分のプロファイルとしてコピーする。"""
+    try:
+        profile = svc.copy_public_profile(profile_id, user["id"], body.new_name)
+        if profile is None:
+            raise HTTPException(status_code=500, detail="コピーに失敗しました")
+        return profile
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/{profile_id}/publish")
+def publish_profile(profile_id: str, body: PublishBody, user: dict = Depends(require_user)):
+    """プロファイルをマーケットプレイスに公開する。"""
+    profile = svc.publish_profile(profile_id, user["id"], body.public_description, body.tags)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="プロファイルが見つかりません")
+    return profile
+
+
+@router.post("/{profile_id}/unpublish")
+def unpublish_profile(profile_id: str, user: dict = Depends(require_user)):
+    """プロファイルをマーケットプレイスから非公開にする。"""
+    ok = svc.unpublish_profile(profile_id, user["id"])
+    if not ok:
+        raise HTTPException(status_code=404, detail="プロファイルが見つかりません")
+    return {"unpublished": True}
 
 
 class ApplyDnaBody(BaseModel):

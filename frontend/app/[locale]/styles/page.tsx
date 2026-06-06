@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
-  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type, Dna,
+  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type, Dna, Store,
+  Globe, EyeOff,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -13,6 +14,7 @@ import {
   deleteStyleProfile, activateStyleProfile,
   listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
   aiRefineProfile, getProfileStats,
+  publishStyleProfile, unpublishStyleProfile,
   ApiError,
   DEFAULT_CAPTION_STYLE,
   type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle,
@@ -156,6 +158,27 @@ function CaptionStyleSection({
             />
             <span className="text-xs font-medium text-gray-600">{t("captionBold")}</span>
           </label>
+
+          {/* ズームエフェクト */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t("zoomEffect")}</label>
+            <div className="flex gap-2">
+              {(["none", "subtle", "punch"] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => set("zoom_effect", opt)}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    (value.zoom_effect ?? "none") === opt
+                      ? "border-purple-400 bg-purple-50 text-purple-700"
+                      : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {opt === "none" ? t("zoomNone") : opt === "subtle" ? t("zoomSubtle") : t("zoomPunch")}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -497,18 +520,139 @@ function AiRefineSection({
   );
 }
 
+function PublishSection({
+  profile,
+  onUpdate,
+}: {
+  profile: StyleProfile;
+  onUpdate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [desc, setDesc] = useState(profile.public_description ?? "");
+  const [tags, setTags] = useState<string[]>(profile.tags ?? []);
+  const [saving, setSaving] = useState(false);
+  const ALL_TAGS = ["YouTube", "TikTok", "Podcast", "Interview", "Tutorial", "Vlog", "Talk", "SNS", "Business"];
+
+  async function handlePublish() {
+    setSaving(true);
+    try {
+      await publishStyleProfile(profile.id, desc, tags);
+      onUpdate();
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnpublish() {
+    setSaving(true);
+    try {
+      await unpublishStyleProfile(profile.id);
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleTag(tag: string) {
+    setTags((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]);
+  }
+
+  if (profile.is_public) {
+    return (
+      <div className="mt-3 pt-3 border-t border-gray-50">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+            <Globe className="w-3 h-3" /> マーケットプレイスで公開中
+            {profile.copy_count ? ` · ${profile.copy_count}コピー` : ""}
+          </span>
+          <button
+            onClick={handleUnpublish}
+            disabled={saving}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+          >
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <EyeOff className="w-3 h-3" />}
+            非公開にする
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-50">
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-50 hover:text-purple-600 transition-colors font-medium"
+        >
+          <Globe className="w-3 h-3" /> マーケットプレイスに公開する
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <Globe className="w-3 h-3 text-purple-500" /> 公開設定
+          </p>
+          <textarea
+            value={desc}
+            onChange={(e) => setDesc(e.target.value)}
+            placeholder="このスタイルの説明（どんな動画に向いているか）"
+            rows={2}
+            maxLength={500}
+            className="w-full text-xs px-3 py-2 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+          <div className="flex flex-wrap gap-1">
+            {ALL_TAGS.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                  tags.includes(tag)
+                    ? "bg-purple-100 text-purple-700 border-purple-300"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-purple-200"
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handlePublish}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-xl hover:bg-purple-700 disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Globe className="w-3 h-3" />}
+              公開する
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="px-3 py-1.5 border border-gray-200 text-gray-500 text-xs rounded-xl hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileCard({
   profile,
   onActivate,
   onEdit,
   onDelete,
   onRefineApply,
+  onUpdate,
 }: {
   profile: StyleProfile;
   onActivate: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onRefineApply: (prompt: string) => Promise<void>;
+  onUpdate: () => void;
 }) {
   const t = useTranslations("styles");
   const locale = useLocale();
@@ -588,6 +732,7 @@ function ProfileCard({
 
       <ReferenceVideoSection profileId={profile.id} />
       <AiRefineSection profile={profile} onApply={onRefineApply} />
+      <PublishSection profile={profile} onUpdate={onUpdate} />
     </div>
   );
 }
@@ -647,7 +792,13 @@ export default function StylesPage() {
             <p className="text-gray-500 mt-1 text-sm">{t("subtitle")}</p>
           </div>
           {!showForm && !editingProfile && (
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+              <Link
+                href={`/${locale}/styles/marketplace`}
+                className="flex items-center gap-1.5 px-3 py-2 border border-pink-200 text-pink-600 font-medium rounded-xl hover:bg-pink-50 text-sm transition-colors"
+              >
+                <Store className="w-4 h-4" /> マーケット
+              </Link>
               <Link
                 href={`/${locale}/styles/analyze`}
                 className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-600 font-medium rounded-xl hover:bg-purple-50 text-sm transition-colors"
@@ -719,6 +870,7 @@ export default function StylesPage() {
                 onEdit={() => { setEditingProfile(p); setShowForm(false); }}
                 onDelete={() => handleDelete(p.id)}
                 onRefineApply={(prompt) => handleRefineApply(p.id, prompt)}
+                onUpdate={load}
               />
             ))}
           </div>

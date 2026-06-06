@@ -319,3 +319,24 @@ create policy "Users can delete own videos"
 create policy "Users can access own results"
   on storage.objects for select
   using (auth.uid()::text = (storage.foldername(name))[1] and bucket_id = 'results');
+
+-- =====================
+-- schema v6: Style Marketplace + Zoom Effect
+-- =====================
+
+-- style_profiles: マーケットプレイス関連カラム
+alter table public.style_profiles add column if not exists is_public boolean default false;
+alter table public.style_profiles add column if not exists public_description text default '';
+alter table public.style_profiles add column if not exists copy_count int default 0;
+alter table public.style_profiles add column if not exists tags text[] default '{}';
+
+-- 公開プロファイルは全認証ユーザーが SELECT 可能（INSERT/UPDATE/DELETE は自分のみ）
+do $$
+begin
+  drop policy if exists "Public profiles are viewable" on public.style_profiles;
+end;
+$$;
+
+create policy "Public profiles are viewable"
+  on public.style_profiles for select
+  using (is_public = true OR auth.uid() = user_id);

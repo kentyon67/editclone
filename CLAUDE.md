@@ -94,7 +94,8 @@
 | AI カット粒度改善（raw_segments 使用） | ✅ | `app/services/jobs.py` |
 | AI 編集プロンプト改善（英日対応・フィラーリスト） | ✅ | `app/services/ai_edit.py` |
 | 画像・写真スライド動画化 | ✅ | `app/services/slideshow.py`, `app/routers/videos.py` |
-| ズーム演出・B-roll 提案 | ⏳ | 未実装 |
+| ズーム演出（subtle 5% / punch 10%） | ✅ | `app/services/mp4_render.py` |
+| B-roll 提案 | ⏳ | 未実装 |
 
 ### Phase 5: Plugin 早期着手 — 🔄 コード完了・申請待ち
 
@@ -111,7 +112,8 @@
 | 編集前後ペア分析（"編集DNA"抽出） | ✅ | `app/services/edit_dna.py`, `POST /style-profiles/analyze-pair` |
 | 編集DNA UI（/styles/analyze） | ✅ | `frontend/app/[locale]/styles/analyze/` |
 | フィードバック自動学習（5件ごと自動改善） | ✅ | `app/services/style_profiles.py` |
-| Style Marketplace | ⏳ | 未実装 |
+| Plugin revision diff → フィードバック自動記録 | ✅ | `app/services/projects.py` |
+| Style Marketplace（公開・コピー・タグ） | ✅ | `app/services/style_profiles.py`, `app/routers/style_profiles.py`, `frontend/app/[locale]/styles/marketplace/` |
 | チーム共有・API 公開 | ⏳ | 未実装 |
 
 ---

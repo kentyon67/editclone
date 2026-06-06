@@ -161,7 +161,7 @@ def receive_plugin_revision(
     notes: str = "",
     metadata: Optional[dict] = None,
 ) -> dict:
-    """Plugin からのリビジョンを受信し、競合を検出する。"""
+    """Plugin からのリビジョンを受信し、競合を検出する。学習シグナルも抽出する。"""
     project = get_project(project_id, user_id)
     if project is None:
         raise PermissionError("プロジェクトが見つかりません")
@@ -197,4 +197,71 @@ def receive_plugin_revision(
     new_status = "conflict" if is_conflict else "synced"
     update_sync_status(project_id, user_id, new_status)
 
+    # Plugin の編集内容からスタイル学習シグナルを非同期抽出
+    try:
+        _learn_from_plugin_revision(project, user_id, metadata or {})
+    except Exception as e:
+        logger.debug("revision learning failed: %s", e)
+
     return {"revision": revision, "sync_status": new_status}
+
+
+def _learn_from_plugin_revision(project: dict, user_id: str, metadata: dict) -> None:
+    """
+    Plugin が送信した metadata から学習シグナルを抽出し feedback_logs に記録する。
+
+    Plugin 側が送信できる metadata フィールド（全てオプション）:
+      - cuts_accepted: int        — 採用したカット数
+      - cuts_rejected: int        — 却下したカット数（追加で戻したカット）
+      - manual_adjustments: int   — 手動でタイミングを調整した箇所数
+      - action: "accept" | "reject" | "partial"  — 全体評価（省略時は自動判定）
+      - notes: str                — 自由コメント
+    """
+    cuts_accepted = int(metadata.get("cuts_accepted", 0))
+    cuts_rejected = int(metadata.get("cuts_rejected", 0))
+    manual_adj = int(metadata.get("manual_adjustments", 0))
+    explicit_action = metadata.get("action", "")
+    notes = str(metadata.get("notes", "")).strip()
+
+    total = cuts_accepted + cuts_rejected
+    if total == 0 and not explicit_action:
+        return  # 有効なシグナルなし
+
+    # action を自動判定（explicit が優先）
+    if explicit_action in ("accept", "reject", "partial"):
+        action = explicit_action
+    elif total > 0:
+        accept_rate = cuts_accepted / total
+        if accept_rate >= 0.9 and manual_adj == 0:
+            action = "accept"
+        elif accept_rate >= 0.5:
+            action = "partial"
+        else:
+            action = "reject"
+    else:
+        return
+
+    auto_notes = notes
+    if not auto_notes:
+        parts = []
+        if cuts_rejected > 0:
+            parts.append(f"カット {cuts_rejected}箇所を復元")
+        if manual_adj > 0:
+            parts.append(f"タイミング {manual_adj}箇所を調整")
+        if cuts_accepted > 0:
+            parts.append(f"カット {cuts_accepted}箇所を採用")
+        auto_notes = "、".join(parts) if parts else "Plugin 編集から自動記録"
+
+    # プロジェクトに関連する Style Profile ID を取得
+    style_profile_id = project.get("style_profile_id")
+    source_job_id = project.get("source_job_id", "plugin-revision")
+
+    from app.services.style_profiles import record_feedback
+    record_feedback(
+        user_id=user_id,
+        job_id=source_job_id,
+        action=action,
+        style_profile_id=style_profile_id,
+        notes=auto_notes,
+    )
+    logger.info("plugin revision learning: action=%s, profile=%s", action, style_profile_id)
