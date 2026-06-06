@@ -97,11 +97,13 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 ### FCP Extension（fcp-extension/）
 
-- [x] Swift/SwiftUI WKWebView ベース
-- [x] `window.editcloneBridge = true` inject
-- [x] `window.editcloneNLE = 'fcp'` inject
+- [x] Swift/SwiftUI WKWebView ベース（Full Web UI）
+- [x] `window.editcloneBridge / editcloneNLE / editcloneAgent` inject
 - [x] FCPXML 認証付きダウンロード（Bearer トークン）
 - [x] NSWorkspace.shared.open で FCP 直接起動
+- [x] **AI Agent ブリッジ**: `agentEdit` → ポーリング → 自動 FCPXML インポート
+- [x] **Style Profile ブリッジ**: `getStyleProfiles` / `activateStyleProfile`
+- [x] **リビジョン送信**: `sendRevision` → サーバー学習ループ
 - [ ] macOS 実機テスト・署名
 - [ ] Mac App Store 申請（Apple Developer Program 登録必要）
 
@@ -114,12 +116,24 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 - [ ] Windows 実機テスト
 - [ ] Adobe Exchange 申請
 
-### DaVinci Script（davinci-script/）
+### Premiere UXP（premiere/）— 🆕 完全 Agent リデザイン
 
-- [x] Python スクリプト（Fusion Scripts/Utility に配置）
-- [x] 完了ジョブ一覧取得 + 選択
-- [x] ZIP ダウンロード → FCPXML タイムライン自動生成
-- [ ] ユーザー設定の GUI 化（現状はファイル直接編集が必要）
+- [x] **3タブ Agent UI**: ジョブ / AI編集 / スタイル
+- [x] **AI編集タブ**: 自然言語指示 → `agent-edit` API → ポーリング → 自動インポート
+- [x] **クイックプロンプト**: 冒頭カット・フィラー除去・告知カット・テンポ強化
+- [x] **スタイルタブ**: プロファイル一覧・アクティブ切替
+- [x] **ジョブタブ**: 再編集ボタン → AI編集タブへジャンプ
+- [x] SRT 直接ダウンロード（`/plugin/jobs/{id}/srt`）
+- [ ] Windows 実機テスト
+- [ ] Adobe Exchange 申請
+
+### DaVinci Script（davinci-script/）— 🆕 Agent GUI リデザイン
+
+- [x] Python tkinter 多タブ Agent GUI
+- [x] **AI編集タブ**: テキスト入力 → API → ポーリング → 自動インポート
+- [x] **スタイルタブ**: プロファイル一覧・アクティブ切替
+- [x] **設定タブ**: URL / トークン + 接続テスト
+- [x] ZIP ダウンロード → 永続パスに保存 → FCPXML タイムライン自動生成
 - [ ] 実機テスト（DaVinci Resolve 18+）
 
 ---
@@ -171,3 +185,4 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 | 2026-06-06 | 2.0.0 | Phase 1-4 完了・Phase 5 コード完了を反映。残タスクを明確化 |
 | 2026-06-06 | 2.1.0 | Phase 4 完了（スライドショー）・Phase 6 着手（編集DNA・自動学習） |
 | 2026-06-06 | 2.2.0 | Phase 4 ズーム演出・Phase 6-2 Plugin revision学習・Phase 6-3 マーケットプレイス基盤 |
+| 2026-06-06 | 2.3.0 | Phase 5 Plugin Agent化完了: Premiere UXP 3タブAgent・DaVinci Agent GUI・FCP Agentブリッジ・Plugin API拡張 |

@@ -3,70 +3,160 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EditClone</title>
+  <title>EditClone Agent</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div id="app">
-    <!-- Login Screen -->
+
+    <!-- ===== Login Screen ===== -->
     <div id="screen-login" class="screen">
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+      <div class="logo-block">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
           <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
           <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
           <line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/>
           <line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/>
           <line x1="17" y1="17" x2="22" y2="17"/>
         </svg>
-        <span>EditClone</span>
+        <div>
+          <div class="logo-name">EditClone</div>
+          <div class="logo-sub">AI 動画編集エージェント</div>
+        </div>
       </div>
-      <p class="subtitle">AI 動画編集エージェント</p>
       <div class="form-group">
         <label>メールアドレス</label>
-        <input id="input-email" type="email" placeholder="you@example.com" />
+        <input id="input-email" type="email" placeholder="you@example.com" autocomplete="email" />
       </div>
       <div class="form-group">
         <label>パスワード</label>
-        <input id="input-password" type="password" placeholder="••••••••" />
+        <input id="input-password" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
-      <div id="login-error" class="error hidden"></div>
+      <div id="login-error" class="error-msg hidden"></div>
       <button id="btn-login" class="btn btn-primary">ログイン</button>
-      <p class="hint">アカウントをお持ちでない方は<br/><a href="#" id="link-signup">editclone.vercel.app</a> で登録</p>
+      <p class="hint-text">
+        アカウント未登録は<a href="#" id="link-signup">editclone.vercel.app</a> で
+      </p>
     </div>
 
-    <!-- Job List Screen -->
-    <div id="screen-jobs" class="screen hidden">
-      <div class="header">
-        <div class="logo small">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
+    <!-- ===== Agent Main Screen ===== -->
+    <div id="screen-agent" class="screen hidden">
+
+      <!-- Header -->
+      <div class="agent-header">
+        <div class="agent-logo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2">
             <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
             <line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>
             <line x1="2" y1="12" x2="22" y2="12"/>
           </svg>
           <span>EditClone</span>
         </div>
-        <button id="btn-logout" class="btn btn-ghost">ログアウト</button>
+        <div class="header-right">
+          <span id="header-email" class="header-email"></span>
+          <button id="btn-logout" class="btn-icon" title="ログアウト">⏻</button>
+        </div>
       </div>
-      <p class="user-email" id="user-email"></p>
 
-      <div id="jobs-loading" class="loading">読み込み中...</div>
-      <div id="jobs-empty" class="empty hidden">
-        <p>完了済みの動画がありません。</p>
-        <p><a href="#" id="link-open-web">ウェブで動画を処理する →</a></p>
+      <!-- Tab Bar -->
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="jobs">📁 ジョブ</button>
+        <button class="tab-btn" data-tab="agent">🤖 AI編集</button>
+        <button class="tab-btn" data-tab="styles">🎨 スタイル</button>
       </div>
-      <div id="jobs-list" class="hidden"></div>
 
-      <button id="btn-refresh" class="btn btn-ghost small">更新</button>
+      <!-- ===== Tab: Jobs ===== -->
+      <div id="tab-jobs" class="tab-content">
+        <div class="tab-toolbar">
+          <button id="btn-refresh-jobs" class="btn-small">↻ 更新</button>
+        </div>
+        <div id="jobs-loading" class="loading-msg">読み込み中...</div>
+        <div id="jobs-empty" class="empty-state hidden">
+          <p>完了済みジョブがありません</p>
+          <a href="#" id="link-open-web" class="link-btn">Web で処理する →</a>
+        </div>
+        <div id="jobs-list" class="jobs-list hidden"></div>
+      </div>
+
+      <!-- ===== Tab: Agent ===== -->
+      <div id="tab-agent" class="tab-content hidden">
+        <div class="agent-section">
+          <label class="field-label">対象ジョブ</label>
+          <select id="agent-job-select" class="select-input">
+            <option value="">-- 動画を選択 --</option>
+          </select>
+        </div>
+
+        <div class="agent-section">
+          <label class="field-label">AI 編集指示</label>
+          <textarea
+            id="agent-prompt"
+            class="prompt-input"
+            placeholder="例: 冒頭の挨拶をカットして、フィラーワード（えー、あの）も除去してください"
+            rows="4"
+          ></textarea>
+          <div class="quick-prompts">
+            <span class="quick-label">クイック:</span>
+            <button class="quick-btn" data-prompt="冒頭の挨拶・タイトルコールをカット">冒頭カット</button>
+            <button class="quick-btn" data-prompt="えー、あの、まあ、なんか などのフィラーワードをすべてカット">フィラー除去</button>
+            <button class="quick-btn" data-prompt="チャンネル登録・いいね・SNS告知のセグメントをカット">告知カット</button>
+            <button class="quick-btn" data-prompt="動画の末尾のアウトロ・挨拶をカット">アウトロカット</button>
+            <button class="quick-btn" data-prompt="テンポよく：沈黙・間延びを積極的にカットしてテンポアップ">テンポ強化</button>
+          </div>
+        </div>
+
+        <button id="btn-agent-send" class="btn btn-primary btn-block">
+          🤖 AI 編集を開始
+        </button>
+
+        <!-- Processing State -->
+        <div id="agent-processing" class="agent-processing hidden">
+          <div class="spinner"></div>
+          <p id="agent-progress-text">処理中...</p>
+          <div class="progress-bar-wrap">
+            <div id="agent-progress-bar" class="progress-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Result State -->
+        <div id="agent-result" class="agent-result hidden">
+          <div class="result-icon">✅</div>
+          <p id="agent-result-label">編集が完了しました</p>
+          <button id="btn-import-result" class="btn btn-import btn-block">
+            Premiere Pro にインポート
+          </button>
+          <button id="btn-agent-edit-again" class="btn btn-ghost btn-block small">
+            別の指示で再編集
+          </button>
+        </div>
+
+        <div id="agent-error" class="error-msg hidden"></div>
+      </div>
+
+      <!-- ===== Tab: Styles ===== -->
+      <div id="tab-styles" class="tab-content hidden">
+        <div class="tab-toolbar">
+          <button id="btn-refresh-styles" class="btn-small">↻ 更新</button>
+          <a href="#" id="link-create-style" class="link-btn small">+ Web で作成</a>
+        </div>
+        <div id="styles-loading" class="loading-msg">読み込み中...</div>
+        <div id="styles-empty" class="empty-state hidden">
+          <p>スタイルプロファイルがありません</p>
+          <a href="#" id="link-create-style2" class="link-btn">Web で作成する →</a>
+        </div>
+        <div id="styles-list" class="styles-list hidden"></div>
+      </div>
+
     </div>
 
-    <!-- Importing Screen -->
+    <!-- ===== Importing Overlay ===== -->
     <div id="screen-importing" class="screen hidden">
-      <div class="spinner"></div>
-      <p>Premiere Pro にインポート中...</p>
-      <p class="hint" id="import-status"></p>
+      <div class="spinner large"></div>
+      <p class="importing-title">Premiere Pro にインポート中...</p>
+      <p id="import-status" class="importing-sub"></p>
     </div>
-  </div>
 
+  </div>
   <script src="main.js"></script>
 </body>
 </html>
