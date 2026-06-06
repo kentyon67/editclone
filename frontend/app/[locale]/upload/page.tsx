@@ -103,10 +103,23 @@ export default function UploadPage() {
           {activeProfile && (
             <Link
               href={`/${locale}/styles`}
-              className="flex items-center gap-1.5 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1.5 rounded-full font-medium hover:bg-purple-100 transition-colors flex-shrink-0"
+              className="flex flex-col items-end gap-0.5 text-xs bg-purple-50 border border-purple-200 text-purple-700 px-3 py-1.5 rounded-xl font-medium hover:bg-purple-100 transition-colors flex-shrink-0"
             >
-              <Sparkles className="w-3 h-3" />
-              {activeProfile.name}
+              <span className="flex items-center gap-1">
+                <Sparkles className="w-3 h-3" />
+                {activeProfile.name}
+              </span>
+              {activeProfile.caption_style && (
+                <span className="text-purple-400 font-normal text-[10px] flex items-center gap-1">
+                  <span
+                    style={{ color: activeProfile.caption_style.primary_color, WebkitTextStroke: `0.5px ${activeProfile.caption_style.outline_color}`, fontWeight: activeProfile.caption_style.bold ? "bold" : "normal" }}
+                    className="text-[11px]"
+                  >
+                    A
+                  </span>
+                  {activeProfile.caption_style.font_size}px · {activeProfile.caption_style.position}
+                </span>
+              )}
             </Link>
           )}
         </div>

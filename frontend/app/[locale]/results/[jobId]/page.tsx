@@ -172,35 +172,49 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
         <p className="text-gray-500">{t("subtitle")}</p>
       </div>
 
-      {/* Primary: Save finished video */}
+      {/* Primary: Finished video — inline player + save */}
       {result.has_mp4 && (
-        <div className="mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <Film className="w-5 h-5 text-green-600" />
-            <span className="font-bold text-green-900">{t("mp4SectionTitle")}</span>
-            {result.has_subtitles && (
-              <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-medium">
-                {t("withTelopp")}
-              </span>
-            )}
+        <div className="mb-4 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl overflow-hidden">
+          {/* Inline video player */}
+          <div className="bg-black w-full aspect-video">
+            <video
+              key={getMp4Url(job.job_id)}
+              src={getMp4Url(job.job_id)}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-full object-contain"
+            />
           </div>
-          <p className="text-sm text-green-700 mb-4">{t("mp4Description")}</p>
-          <button
-            onClick={handleSaveMp4}
-            disabled={sharing}
-            className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-green-200 disabled:opacity-60"
-          >
-            {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-            {t("saveMp4")}
-          </button>
-          <a
-            href={getMp4Url(job.job_id)}
-            download
-            className="mt-2 w-full flex items-center justify-center gap-2 py-2 text-sm text-green-600 hover:text-green-800 transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            {t("downloadMp4")}
-          </a>
+
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Film className="w-5 h-5 text-green-600" />
+              <span className="font-bold text-green-900">{t("mp4SectionTitle")}</span>
+              {result.has_subtitles && (
+                <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-medium">
+                  {t("withTelopp")}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-green-700 mb-4">{t("mp4Description")}</p>
+            <button
+              onClick={handleSaveMp4}
+              disabled={sharing}
+              className="w-full flex items-center justify-center gap-3 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:opacity-90 transition-opacity text-lg shadow-lg shadow-green-200 disabled:opacity-60"
+            >
+              {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+              {t("saveMp4")}
+            </button>
+            <a
+              href={getMp4Url(job.job_id)}
+              download
+              className="mt-2 w-full flex items-center justify-center gap-2 py-2 text-sm text-green-600 hover:text-green-800 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              {t("downloadMp4")}
+            </a>
+          </div>
         </div>
       )}
 
