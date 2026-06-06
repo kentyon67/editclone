@@ -340,3 +340,72 @@ $$;
 create policy "Public profiles are viewable"
   on public.style_profiles for select
   using (is_public = true OR auth.uid() = user_id);
+
+-- =====================
+-- schema v7: Reviews + Team Members + Accuracy Metrics
+-- =====================
+
+-- style_profile_reviews（マーケットプレイス評価・レビュー）
+create table if not exists public.style_profile_reviews (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references public.style_profiles(id) on delete cascade not null,
+  reviewer_id uuid references public.profiles(id) on delete cascade not null,
+  rating int not null check (rating >= 1 and rating <= 5),
+  review_text text default '',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(profile_id, reviewer_id)
+);
+
+alter table public.style_profile_reviews enable row level security;
+
+do $$
+begin
+  drop policy if exists "Reviews are viewable by authenticated users" on public.style_profile_reviews;
+  drop policy if exists "Users can manage own reviews" on public.style_profile_reviews;
+end;
+$$;
+
+create policy "Reviews are viewable by authenticated users"
+  on public.style_profile_reviews for select
+  using (auth.role() = 'authenticated');
+
+create policy "Users can manage own reviews"
+  on public.style_profile_reviews for insert
+  with check (auth.uid() = reviewer_id);
+
+-- team_members（チーム招待・メンバー管理 — Studio プラン専用）
+create table if not exists public.team_members (
+  id uuid default gen_random_uuid() primary key,
+  owner_id uuid references public.profiles(id) on delete cascade not null,
+  member_id uuid references public.profiles(id) on delete set null,
+  invited_email text not null,
+  role text not null default 'editor' check (role in ('editor', 'admin')),
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
+  invite_token text unique not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.team_members enable row level security;
+
+do $$
+begin
+  drop policy if exists "Owners can manage their team" on public.team_members;
+  drop policy if exists "Members can view their invites" on public.team_members;
+end;
+$$;
+
+create policy "Owners can manage their team"
+  on public.team_members for all
+  using (auth.uid() = owner_id)
+  with check (auth.uid() = owner_id);
+
+create policy "Members can view their invites"
+  on public.team_members for select
+  using (auth.uid() = member_id);
+
+-- team_members の UPDATE（招待承認用 — member_id が自分のもの）
+create policy "Members can accept invites"
+  on public.team_members for update
+  using (auth.uid() = member_id OR auth.uid() = owner_id);

@@ -210,3 +210,38 @@ def job_edl(job_id: str):
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{job.video_id}.edl"'},
     )
+
+
+@router.get("/{job_id}/broll-suggestions")
+def job_broll_suggestions(job_id: str, user: dict = Depends(require_user)):
+    """
+    完了済みジョブのトランスクリプトを分析し、B-roll挿入ポイントを提案する。
+    Claude API を使用するため、ANTHROPIC_API_KEY が必要。
+    """
+    job = _get_owned_job(job_id, user)
+    if job.status != JobStatus.completed:
+        raise HTTPException(status_code=400, detail="Job not completed yet")
+
+    result = job.result or {}
+    transcript = result.get("transcript", {})
+    segments = transcript.get("segments") or transcript.get("raw_segments") or []
+    info = result.get("info", {})
+    total_duration = float(info.get("duration_seconds", 0))
+    prompt = getattr(job, "prompt", "") or ""
+
+    if not segments:
+        return {"job_id": job_id, "suggestions": [], "message": "トランスクリプトが見つかりません"}
+
+    from app.services.broll import suggest_broll
+    suggestions = suggest_broll(segments, prompt=prompt, total_duration=total_duration)
+
+    log_event("broll_suggestions", user_id=user["id"], video_id=job.video_id, job_id=job_id,
+              metadata={"count": len(suggestions)})
+
+    return {
+        "job_id": job_id,
+        "video_id": job.video_id,
+        "total_duration": total_duration,
+        "suggestion_count": len(suggestions),
+        "suggestions": suggestions,
+    }

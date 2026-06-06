@@ -95,7 +95,7 @@
 | AI 編集プロンプト改善（英日対応・フィラーリスト） | ✅ | `app/services/ai_edit.py` |
 | 画像・写真スライド動画化 | ✅ | `app/services/slideshow.py`, `app/routers/videos.py` |
 | ズーム演出（subtle 5% / punch 10%） | ✅ | `app/services/mp4_render.py` |
-| B-roll 提案 | ⏳ | 未実装 |
+| B-roll 提案 | ✅ | `app/services/broll.py`, `GET /jobs/{id}/broll-suggestions` |
 
 ### Phase 5: Plugin 早期着手 — 🔄 コード完了・申請待ち
 
@@ -114,7 +114,11 @@
 | フィードバック自動学習（5件ごと自動改善） | ✅ | `app/services/style_profiles.py` |
 | Plugin revision diff → フィードバック自動記録 | ✅ | `app/services/projects.py` |
 | Style Marketplace（公開・コピー・タグ） | ✅ | `app/services/style_profiles.py`, `app/routers/style_profiles.py`, `frontend/app/[locale]/styles/marketplace/` |
-| チーム共有・API 公開 | ⏳ | 未実装 |
+| マーケット評価・レビュー（星評価・分布） | ✅ | `app/services/style_profiles.py`, `frontend/app/[locale]/styles/marketplace/` |
+| パーソナライズ精度の定量評価（週次accept率・トレンド） | ✅ | `app/services/style_profiles.py`, `GET /style-profiles/{id}/accuracy` |
+| チーム招待・権限管理（Studio プラン） | ✅ | `app/services/teams.py`, `app/routers/teams.py`, `frontend/app/[locale]/account/` |
+| 外部 API 公開 | ⏳ | 未実装 |
+| Webhook 連携 | ⏳ | 未実装 |
 
 ---
 

@@ -294,3 +294,49 @@ def apply_dna(profile_id: str, body: ApplyDnaBody, user: dict = Depends(require_
     if profile is None:
         raise HTTPException(status_code=404, detail="プロファイルが見つかりません")
     return profile
+
+
+# ---------------------------------------------------------------------------
+# Accuracy Metrics (Phase 6-2)
+# ---------------------------------------------------------------------------
+
+@router.get("/{profile_id}/accuracy")
+def profile_accuracy(profile_id: str, user: dict = Depends(require_user)):
+    """週ごとの accept 率推移とトレンド（improving/declining/stable）を返す。"""
+    return svc.get_profile_accuracy(profile_id, user["id"])
+
+
+# ---------------------------------------------------------------------------
+# Marketplace Reviews (Phase 6-3)
+# ---------------------------------------------------------------------------
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    review_text: str = Field("", max_length=500)
+
+
+@router.post("/marketplace/{profile_id}/review")
+def add_marketplace_review(
+    profile_id: str,
+    body: ReviewCreate,
+    user: dict = Depends(require_user),
+):
+    """公開プロファイルに星評価とレビューを投稿する（自分のプロファイルは不可）。"""
+    try:
+        review = svc.add_review(profile_id, user["id"], body.rating, body.review_text)
+        if review is None:
+            raise HTTPException(status_code=500, detail="レビューの保存に失敗しました")
+        return review
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/marketplace/{profile_id}/reviews")
+def get_marketplace_reviews(
+    profile_id: str,
+    user: dict = Depends(require_user),
+):
+    """公開プロファイルのレビュー一覧と統計を返す。"""
+    reviews = svc.get_reviews(profile_id)
+    stats = svc.get_review_stats(profile_id)
+    return {"stats": stats, "reviews": reviews}

@@ -548,3 +548,164 @@ export async function postPluginRevision(
   if (!res.ok) return handleError(res, "Plugin revision post failed");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// B-roll 提案 (Phase 4)
+// ---------------------------------------------------------------------------
+
+export interface BrollSuggestion {
+  start: number;
+  end: number;
+  duration: number;
+  keyword: string;
+  description: string;
+  b_roll_type: string;
+  priority: "high" | "medium" | "low";
+}
+
+export async function getBrollSuggestions(jobId: string): Promise<{
+  job_id: string;
+  suggestion_count: number;
+  suggestions: BrollSuggestion[];
+}> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/jobs/${jobId}/broll-suggestions`, { headers });
+  if (!res.ok) return handleError(res, "B-roll suggestions failed");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// 精度メトリクス (Phase 6-2)
+// ---------------------------------------------------------------------------
+
+export interface AccuracyWeek {
+  week: string;
+  accept: number;
+  partial: number;
+  reject: number;
+  total: number;
+  accept_rate: number;
+}
+
+export interface ProfileAccuracy {
+  profile_id: string;
+  total_feedback: number;
+  overall_accept_rate: number;
+  trend: "improving" | "declining" | "stable";
+  weeks: AccuracyWeek[];
+}
+
+export async function getProfileAccuracy(profileId: string): Promise<ProfileAccuracy> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/accuracy`, { headers });
+  if (!res.ok) return handleError(res, "Accuracy fetch failed");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// マーケット評価・レビュー (Phase 6-3)
+// ---------------------------------------------------------------------------
+
+export interface MarketplaceReview {
+  id: string;
+  rating: number;
+  review_text: string;
+  created_at: string;
+}
+
+export interface ReviewStats {
+  count: number;
+  average: number;
+  distribution: Record<string, number>;
+}
+
+export async function addMarketplaceReview(
+  profileId: string,
+  rating: number,
+  reviewText: string = "",
+): Promise<MarketplaceReview> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/marketplace/${profileId}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ rating, review_text: reviewText }),
+  });
+  if (!res.ok) return handleError(res, "Review post failed");
+  return res.json();
+}
+
+export async function getMarketplaceReviews(profileId: string): Promise<{
+  stats: ReviewStats;
+  reviews: MarketplaceReview[];
+}> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/marketplace/${profileId}/reviews`, { headers });
+  if (!res.ok) return { stats: { count: 0, average: 0, distribution: {} }, reviews: [] };
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// チーム管理 (Phase 6-4: Studio プランのみ)
+// ---------------------------------------------------------------------------
+
+export interface TeamMember {
+  id: string;
+  invited_email: string;
+  member_id: string | null;
+  role: "editor" | "admin";
+  status: "pending" | "accepted" | "rejected";
+  created_at: string;
+}
+
+export async function getTeam(): Promise<{
+  my_team: { members: TeamMember[] };
+  joined_teams: { id: string; owner_id: string; role: string; status: string; created_at: string }[];
+}> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/teams`, { headers });
+  if (!res.ok) return handleError(res, "Team fetch failed");
+  return res.json();
+}
+
+export async function inviteTeamMember(
+  email: string,
+  role: "editor" | "admin" = "editor",
+): Promise<TeamMember> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/teams/invite`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ email, role }),
+  });
+  if (!res.ok) return handleError(res, "Invite failed");
+  return res.json();
+}
+
+export async function removeTeamMember(memberRowId: string): Promise<void> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/teams/members/${memberRowId}`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "Remove member failed");
+}
+
+export async function getTeamInviteInfo(token: string): Promise<{
+  invited_email: string;
+  role: string;
+  status: string;
+}> {
+  const res = await fetch(`${API_URL}/teams/invitations/${token}`);
+  if (!res.ok) return handleError(res, "Invite info fetch failed");
+  return res.json();
+}
+
+export async function acceptTeamInvite(token: string): Promise<{ accepted: boolean; role: string }> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/teams/invitations/${token}/accept`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) return handleError(res, "Accept invite failed");
+  return res.json();
+}

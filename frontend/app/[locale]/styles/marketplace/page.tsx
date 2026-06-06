@@ -4,17 +4,59 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Store, Copy, CheckCircle, Loader2,
-  Users, Tag, Zap, ChevronDown,
+  Star, ChevronDown, ChevronUp,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import {
   listMarketplaceProfiles,
   copyMarketplaceProfile,
+  addMarketplaceReview,
+  getMarketplaceReviews,
   type PublicStyleProfile,
+  type ReviewStats,
 } from "@/lib/api";
 
 const ALL_TAGS = ["YouTube", "TikTok", "Podcast", "Interview", "Tutorial", "Vlog", "Talk", "Documentary", "SNS", "Business"];
+
+function StarPicker({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          onMouseEnter={() => setHover(n)}
+          onMouseLeave={() => setHover(0)}
+          className="text-xl leading-none transition-transform hover:scale-110"
+          aria-label={`${n}星`}
+        >
+          <Star
+            className={`w-5 h-5 ${n <= (hover || value) ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}`}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StarDisplay({ average, count }: { average: number; count: number }) {
+  const filled = Math.round(average);
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex gap-0.5">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Star key={n} className={`w-3.5 h-3.5 ${n <= filled ? "fill-yellow-400 text-yellow-400" : "text-gray-200"}`} />
+        ))}
+      </div>
+      <span className="text-xs text-gray-500">
+        {count > 0 ? `${average.toFixed(1)} (${count})` : "未評価"}
+      </span>
+    </div>
+  );
+}
 
 function ProfileCard({
   profile,
@@ -27,8 +69,38 @@ function ProfileCard({
   copying: boolean;
   copied: boolean;
 }) {
-  const locale = useLocale();
   const cs = profile.caption_style;
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
+  const [userRating, setUserRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  async function loadStats() {
+    const data = await getMarketplaceReviews(profile.id);
+    setReviewStats(data.stats);
+  }
+
+  async function handleSubmitReview() {
+    if (!userRating) return;
+    setSubmitting(true);
+    try {
+      await addMarketplaceReview(profile.id, userRating, reviewText);
+      setSubmitted(true);
+      await loadStats();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleToggleReview() {
+    const next = !reviewOpen;
+    setReviewOpen(next);
+    if (next && !reviewStats) loadStats();
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col gap-3">
@@ -96,6 +168,68 @@ function ProfileCard({
         <p className="text-xs text-gray-400 italic line-clamp-2 border-t border-gray-50 pt-2">
           &ldquo;{profile.default_prompt}&rdquo;
         </p>
+      )}
+
+      {/* Review toggle */}
+      <button
+        type="button"
+        onClick={handleToggleReview}
+        className="flex items-center justify-between text-xs text-gray-500 hover:text-purple-600 transition-colors pt-1 border-t border-gray-50"
+      >
+        <span className="flex items-center gap-1">
+          <Star className="w-3.5 h-3.5" />
+          {reviewStats
+            ? <StarDisplay average={reviewStats.average} count={reviewStats.count} />
+            : "評価・レビュー"}
+        </span>
+        {reviewOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      </button>
+
+      {reviewOpen && (
+        <div className="bg-gray-50 rounded-xl p-3 flex flex-col gap-2">
+          {submitted ? (
+            <p className="text-xs text-green-600 text-center font-medium">レビューを投稿しました！</p>
+          ) : (
+            <>
+              <p className="text-xs text-gray-500 font-medium">このスタイルを評価</p>
+              <StarPicker value={userRating} onChange={setUserRating} />
+              <textarea
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                placeholder="コメント（任意）"
+                rows={2}
+                className="text-xs p-2 border border-gray-200 rounded-lg resize-none focus:outline-none focus:border-purple-400 bg-white"
+                maxLength={200}
+              />
+              <button
+                onClick={handleSubmitReview}
+                disabled={!userRating || submitting}
+                className="flex items-center justify-center gap-1.5 py-1.5 bg-purple-600 text-white text-xs font-semibold rounded-lg disabled:opacity-40 hover:bg-purple-700 transition-colors"
+              >
+                {submitting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Star className="w-3 h-3" />}
+                投稿
+              </button>
+            </>
+          )}
+          {reviewStats && reviewStats.count > 0 && (
+            <div className="mt-1 flex flex-col gap-0.5">
+              {[5, 4, 3, 2, 1].map((star) => {
+                const cnt = reviewStats.distribution[String(star)] ?? 0;
+                const pct = reviewStats.count > 0 ? (cnt / reviewStats.count) * 100 : 0;
+                return (
+                  <div key={star} className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                    <span className="w-2">{star}</span>
+                    <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                    <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-yellow-400 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-4 text-right">{cnt}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       <button

@@ -493,3 +493,178 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
         return message.content[0].text.strip()
     except Exception as e:
         raise RuntimeError(f"Claude API エラー: {e}") from e
+
+
+# ---------------------------------------------------------------------------
+# Accuracy Metrics (Phase 6-2: パーソナライズ精度の定量評価)
+# ---------------------------------------------------------------------------
+
+def get_profile_accuracy(profile_id: str, user_id: str) -> dict:
+    """
+    プロファイルのパーソナライズ精度を時系列で評価する。
+    週ごとのaccept率推移と、トレンド（改善中/低下中/安定）を返す。
+    """
+    try:
+        resp = (
+            _client().table("feedback_logs")
+            .select("action, created_at")
+            .eq("user_id", user_id)
+            .eq("style_profile_id", profile_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as e:
+        logger.warning("get_profile_accuracy failed: %s", e)
+        return _empty_accuracy()
+
+    if not rows:
+        return _empty_accuracy()
+
+    # 週ごとに集計
+    from collections import defaultdict
+    weekly: dict[str, dict] = defaultdict(lambda: {"accept": 0, "partial": 0, "reject": 0, "total": 0})
+    for row in rows:
+        created = row.get("created_at", "")
+        week = _iso_week_key(created)
+        action = row.get("action", "")
+        weekly[week]["total"] += 1
+        if action in ("accept", "partial", "reject"):
+            weekly[week][action] += 1
+
+    sorted_weeks = sorted(weekly.keys())
+    week_data = []
+    for w in sorted_weeks:
+        d = weekly[w]
+        total = d["total"]
+        accept_rate = round((d["accept"] + d["partial"] * 0.5) / total, 3) if total > 0 else 0
+        week_data.append({
+            "week": w,
+            "accept": d["accept"],
+            "partial": d["partial"],
+            "reject": d["reject"],
+            "total": total,
+            "accept_rate": accept_rate,
+        })
+
+    # 全体統計
+    total_all = sum(w["total"] for w in week_data)
+    accept_all = sum(w["accept"] for w in week_data)
+    partial_all = sum(w["partial"] for w in week_data)
+    overall_rate = round((accept_all + partial_all * 0.5) / total_all, 3) if total_all > 0 else 0
+
+    # トレンド判定（最新3週 vs 直前3週）
+    trend = "stable"
+    if len(week_data) >= 6:
+        recent = sum(w["accept_rate"] for w in week_data[-3:]) / 3
+        prior = sum(w["accept_rate"] for w in week_data[-6:-3]) / 3
+        if recent - prior > 0.05:
+            trend = "improving"
+        elif prior - recent > 0.05:
+            trend = "declining"
+    elif len(week_data) >= 2:
+        if week_data[-1]["accept_rate"] > week_data[0]["accept_rate"] + 0.05:
+            trend = "improving"
+        elif week_data[0]["accept_rate"] > week_data[-1]["accept_rate"] + 0.05:
+            trend = "declining"
+
+    return {
+        "profile_id": profile_id,
+        "total_feedback": total_all,
+        "overall_accept_rate": overall_rate,
+        "trend": trend,
+        "weeks": week_data,
+    }
+
+
+def _empty_accuracy() -> dict:
+    return {
+        "profile_id": "",
+        "total_feedback": 0,
+        "overall_accept_rate": 0,
+        "trend": "stable",
+        "weeks": [],
+    }
+
+
+def _iso_week_key(iso_str: str) -> str:
+    """'2026-06-05T12:34:56...' → '2026-W23' 形式に変換。"""
+    try:
+        import datetime
+        dt = datetime.datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+        return f"{dt.isocalendar()[0]}-W{dt.isocalendar()[1]:02d}"
+    except Exception:
+        return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Marketplace Reviews (Phase 6-3: 評価・レビュー)
+# ---------------------------------------------------------------------------
+
+def add_review(profile_id: str, reviewer_id: str, rating: int, review_text: str = "") -> Optional[dict]:
+    """マーケットプレイスのプロファイルに星評価とレビューを追加する。"""
+    if not 1 <= rating <= 5:
+        raise ValueError("rating は 1〜5 の整数です")
+
+    profile = get_public_profile(profile_id)
+    if profile is None:
+        raise ValueError("公開プロファイルが見つかりません")
+
+    if profile.get("user_id") == reviewer_id:
+        raise ValueError("自分のプロファイルは評価できません")
+
+    try:
+        resp = _client().table("style_profile_reviews").upsert({
+            "profile_id": profile_id,
+            "reviewer_id": reviewer_id,
+            "rating": rating,
+            "review_text": review_text[:500].strip(),
+        }, on_conflict="profile_id,reviewer_id").execute()
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        logger.warning("add_review failed: %s", e)
+        return None
+
+
+def get_reviews(profile_id: str, limit: int = 20) -> list[dict]:
+    """プロファイルのレビュー一覧を返す（新しい順）。"""
+    try:
+        resp = (
+            _client().table("style_profile_reviews")
+            .select("id, rating, review_text, created_at, updated_at")
+            .eq("profile_id", profile_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        logger.warning("get_reviews failed: %s", e)
+        return []
+
+
+def get_review_stats(profile_id: str) -> dict:
+    """プロファイルの平均評価と星別カウントを返す。"""
+    try:
+        resp = (
+            _client().table("style_profile_reviews")
+            .select("rating")
+            .eq("profile_id", profile_id)
+            .execute()
+        )
+        rows = resp.data or []
+    except Exception as e:
+        logger.warning("get_review_stats failed: %s", e)
+        rows = []
+
+    if not rows:
+        return {"count": 0, "average": 0.0, "distribution": {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}}
+
+    dist = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for r in rows:
+        star = int(r.get("rating", 0))
+        if star in dist:
+            dist[star] += 1
+
+    avg = round(sum(r.get("rating", 0) for r in rows) / len(rows), 2)
+    return {"count": len(rows), "average": avg, "distribution": dist}

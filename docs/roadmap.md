@@ -86,8 +86,8 @@
 **追加完了:**
 - [x] ズーム演出（subtle 5% / punch 10% 中央クロップズームイン）
 
-**残タスク:**
-- [ ] B-roll 提案
+**完了済み（追加）:**
+- [x] B-roll 提案（Claude API トランスクリプト分析 → 挿入ポイント + キーワード提案）
 
 ---
 
@@ -155,7 +155,7 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 - [x] 採用 / 却下データの蓄積（feedback_logs テーブル）
 - [x] フィードバック 5 件ごとの自動プロンプト改善（record_feedback → _auto_refine_profile）
 - [x] Plugin revision diff → フィードバック自動記録（`_learn_from_plugin_revision`）
-- [ ] パーソナライズ精度の定量評価（before/after 比較メトリクス）
+- [x] パーソナライズ精度の定量評価（週次 accept 率推移・トレンド分析）
 
 ### 6-3. Style Marketplace ✅（基盤完了）
 
@@ -165,12 +165,14 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 - [x] タグ付け（YouTube, TikTok, Podcast など 10 種類）
 - [x] copy_count によるランキング
 - [x] フロントエンド マーケットプレイスページ（/styles/marketplace）
-- [ ] 購入・評価・レビュー（将来: Creator 収益分配）
+- [x] 評価・レビュー（星評価 1〜5・コメント・分布グラフ）
+- [ ] 購入・Creator 収益分配
 - [ ] ジャンル別ランキング強化
 
 ### 6-4. チーム・API
 
-- [ ] チーム招待・権限管理（Studio プラン）
+- [x] チーム招待・権限管理（Studio プラン: 招待・承認・削除・ロール管理）
+- [x] チームスタイルプロファイル共有（チームオーナーのプロファイルをメンバーが利用可能）
 - [ ] 外部 API 公開
 - [ ] Webhook 連携
 
@@ -180,9 +182,10 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 | 日付 | バージョン | 内容 |
 |------|-----------|------|
-| 2026-06-03 | 0.1.0 | 正式ロードマップ初版 |
+| 2026-06-03 | 0.1.0 | 正式ロードマップ初版（最終更新: 2026-06-06） |
 | 2026-06-04 | 1.0.0 | 6 フェーズ構成に改定 |
 | 2026-06-06 | 2.0.0 | Phase 1-4 完了・Phase 5 コード完了を反映。残タスクを明確化 |
 | 2026-06-06 | 2.1.0 | Phase 4 完了（スライドショー）・Phase 6 着手（編集DNA・自動学習） |
 | 2026-06-06 | 2.2.0 | Phase 4 ズーム演出・Phase 6-2 Plugin revision学習・Phase 6-3 マーケットプレイス基盤 |
 | 2026-06-06 | 2.3.0 | Phase 5 Plugin Agent化完了: Premiere UXP 3タブAgent・DaVinci Agent GUI・FCP Agentブリッジ・Plugin API拡張 |
+| 2026-06-06 | 2.4.0 | Phase 4完了: B-roll提案（Claude API）。Phase 6-2: 精度メトリクス（週次accept率・トレンド）。Phase 6-3: 星評価・レビューシステム。Phase 6-4: チーム招待・Studio権限管理。Schema v7 |
