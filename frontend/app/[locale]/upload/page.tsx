@@ -3,7 +3,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles } from "lucide-react";
+import { Upload, Film, Settings, Loader2, ChevronDown, AlertTriangle, ArrowUpRight, Sparkles, Image as ImageIcon } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { uploadVideo, startProcessing, getActiveStyleProfile, ApiError, type StyleProfile } from "@/lib/api";
@@ -100,6 +100,13 @@ export default function UploadPage() {
       <main className="pt-24 pb-16 px-4 max-w-2xl mx-auto">
         <div className="flex items-start justify-between gap-4 mb-8">
           <h1 className="text-3xl font-black text-gray-900">{t("title")}</h1>
+          <Link
+            href={`/${locale}/upload/slideshow`}
+            className="flex items-center gap-1.5 text-xs border border-orange-200 text-orange-600 px-3 py-1.5 rounded-xl font-medium hover:bg-orange-50 transition-colors flex-shrink-0"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            スライドショー
+          </Link>
           {activeProfile && (
             <Link
               href={`/${locale}/styles`}

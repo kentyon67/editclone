@@ -407,6 +407,81 @@ export async function reExportProject(
   return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Edit DNA — 編集前後ペア分析 (Phase 6)
+// ---------------------------------------------------------------------------
+
+export interface EditDnaResult {
+  before_duration: number;
+  after_duration: number;
+  removed_ratio: number;
+  removed_seconds: number;
+  cuts_per_minute: number;
+  avg_segment_seconds: number;
+  silence_count: number;
+  detected_noise_db: number;
+  suggested_noise_db: number;
+  suggested_min_silence: number;
+  suggested_prompt: string;
+}
+
+export async function analyzeEditPair(
+  before: File,
+  after: File,
+): Promise<EditDnaResult> {
+  const form = new FormData();
+  form.append("before", before);
+  form.append("after", after);
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/analyze-pair`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) return handleError(res, "Edit pair analysis failed");
+  return res.json();
+}
+
+export async function applyDnaToProfile(
+  profileId: string,
+  data: { noise_db: number; min_silence_seconds: number; default_prompt?: string },
+): Promise<StyleProfile> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/apply-dna`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) return handleError(res, "Apply DNA failed");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Slideshow (Phase 4)
+// ---------------------------------------------------------------------------
+
+export async function createSlideshow(
+  images: File[],
+  options: { duration_per_slide?: number; transition?: string; width?: number; height?: number } = {},
+): Promise<Blob> {
+  const form = new FormData();
+  for (const img of images) form.append("images", img);
+  if (options.duration_per_slide !== undefined)
+    form.append("duration_per_slide", String(options.duration_per_slide));
+  if (options.transition) form.append("transition", options.transition);
+  if (options.width) form.append("width", String(options.width));
+  if (options.height) form.append("height", String(options.height));
+
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/videos/slideshow`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) return handleError(res, "Slideshow creation failed");
+  return res.blob();
+}
+
 export async function postPluginRevision(
   projectId: string,
   notes: string = "",

@@ -93,7 +93,7 @@
 | カット点音声クロスフェード（20ms afade） | ✅ | `app/services/mp4_render.py` |
 | AI カット粒度改善（raw_segments 使用） | ✅ | `app/services/jobs.py` |
 | AI 編集プロンプト改善（英日対応・フィラーリスト） | ✅ | `app/services/ai_edit.py` |
-| 画像・写真スライド動画化 | ⏳ | 未実装 |
+| 画像・写真スライド動画化 | ✅ | `app/services/slideshow.py`, `app/routers/videos.py` |
 | ズーム演出・B-roll 提案 | ⏳ | 未実装 |
 
 ### Phase 5: Plugin 早期着手 — 🔄 コード完了・申請待ち
@@ -104,14 +104,15 @@
 | Premiere CEP Panel（HTML/JS） | ✅ `plugins/premiere-cep/` | ⏳ 未申請 | Adobe: 2〜4 週間 |
 | DaVinci Script（Python） | ✅ `plugins/davinci-script/` | — | 申請不要（配布のみ） |
 
-### Phase 6: Learning & Marketplace — ⏳ 未着手
+### Phase 6: Learning & Marketplace — 🔄 着手済み
 
-| 機能 | 備考 |
-|------|------|
-| 編集前後ペア分析（"編集DNA"抽出） | 業界最高レベルの差別化 |
-| ユーザーフィードバック学習 | Plugin 修正データ活用 |
-| Style Marketplace | 販売・購入・収益分配 |
-| チーム共有・API 公開 | Studio プラン付加価値 |
+| 機能 | 状態 | ファイル |
+|------|------|------|
+| 編集前後ペア分析（"編集DNA"抽出） | ✅ | `app/services/edit_dna.py`, `POST /style-profiles/analyze-pair` |
+| 編集DNA UI（/styles/analyze） | ✅ | `frontend/app/[locale]/styles/analyze/` |
+| フィードバック自動学習（5件ごと自動改善） | ✅ | `app/services/style_profiles.py` |
+| Style Marketplace | ⏳ | 未実装 |
+| チーム共有・API 公開 | ⏳ | 未実装 |
 
 ---
 

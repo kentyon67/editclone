@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
-  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type,
+  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type, Dna,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -647,12 +647,20 @@ export default function StylesPage() {
             <p className="text-gray-500 mt-1 text-sm">{t("subtitle")}</p>
           </div>
           {!showForm && !editingProfile && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:opacity-90 text-sm flex-shrink-0"
-            >
-              <Plus className="w-4 h-4" /> {t("new")}
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Link
+                href={`/${locale}/styles/analyze`}
+                className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-600 font-medium rounded-xl hover:bg-purple-50 text-sm transition-colors"
+              >
+                <Dna className="w-4 h-4" /> {t("analyzeBtn")}
+              </Link>
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-xl hover:opacity-90 text-sm"
+              >
+                <Plus className="w-4 h-4" /> {t("new")}
+              </button>
+            </div>
           )}
         </div>
 

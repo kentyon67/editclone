@@ -12,9 +12,9 @@
 | Phase 1 | Web v1 安定化（デプロイ・MP4・制限・Analytics） | ✅ 完了 |
 | Phase 2 | Style Engine v1（Style Profile 生成・適用） | ✅ 完了 |
 | Phase 3 | Project Sync Foundation | ✅ 完了 |
-| Phase 4 | Rich Editing（テロップ・Premiere XML・EDL・Caption Style） | ✅ 大半完了 |
+| Phase 4 | Rich Editing（テロップ・Premiere XML・EDL・Caption Style） | ✅ 完了 |
 | Phase 5 | Plugin 早期着手（Phase 2〜3 と並行） | 🔄 コード完了・未申請 |
-| Phase 6 | Learning & Marketplace | ⏳ 未着手 |
+| Phase 6 | Learning & Marketplace | 🔄 着手済み |
 
 ---
 
@@ -79,8 +79,11 @@
 - [x] AI カット粒度改善（Whisper raw_segments 使用で細粒度カットが可能に）
 - [x] AI 編集プロンプト改善（英日バイリンガル対応・フィラーワードリスト追加）
 
+**追加完了:**
+- [x] 画像・写真スライドショー動画化（POST /videos/slideshow + /upload/slideshow UI）
+- [x] DaVinci Script に tkinter GUI 設定追加（初回起動時にダイアログ）
+
 **残タスク:**
-- [ ] 画像・写真スライド動画化
 - [ ] ズーム演出・B-roll 提案
 
 ---
@@ -118,22 +121,24 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 
 ---
 
-## Phase 6: Learning & Marketplace ⏳（未着手）
+## Phase 6: Learning & Marketplace 🔄（着手済み）
 
 **目標:** AI 学習ループの完成と収益拡大
 
-### 6-1. 編集前後ペア分析（最重要差別化機能）
+### 6-1. 編集前後ペア分析（最重要差別化機能）✅
 
-- [ ] 編集前動画 + 編集後動画のペアアップロード
-- [ ] カット位置・テロップ・演出の差分抽出
-- [ ] Style Profile への自動反映
-- [ ] 「編集 DNA」生成（ユーザーごとの編集パターン）
+- [x] 編集前動画 + 編集後動画のペアアップロード（POST /style-profiles/analyze-pair）
+- [x] 無音閾値・カット頻度・削除割合・平均セグメント長の抽出
+- [x] 推奨 noise_db / min_silence / AI プロンプトの自動生成
+- [x] Style Profile への適用 API（POST /style-profiles/{id}/apply-dna）
+- [x] 編集 DNA 分析 UI（/styles/analyze ページ）
 
-### 6-2. ユーザーフィードバック学習
+### 6-2. ユーザーフィードバック学習 ✅
 
-- [ ] 採用 / 却下データの蓄積分析
-- [ ] Plugin 修正データの Style Profile 反映
-- [ ] パーソナライズ精度の定量評価
+- [x] 採用 / 却下データの蓄積（feedback_logs テーブル）
+- [x] フィードバック 5 件ごとの自動プロンプト改善（record_feedback → _auto_refine_profile）
+- [ ] Plugin 修正データの Style Profile 反映（revision diff 分析）
+- [ ] パーソナライズ精度の定量評価（before/after 比較メトリクス）
 
 ### 6-3. Style Marketplace
 
@@ -157,3 +162,4 @@ Apple App Store 審査: 1〜3 ヶ月 / Adobe Marketplace 審査: 2〜4 週間
 | 2026-06-03 | 0.1.0 | 正式ロードマップ初版 |
 | 2026-06-04 | 1.0.0 | 6 フェーズ構成に改定 |
 | 2026-06-06 | 2.0.0 | Phase 1-4 完了・Phase 5 コード完了を反映。残タスクを明確化 |
+| 2026-06-06 | 2.1.0 | Phase 4 完了（スライドショー）・Phase 6 着手（編集DNA・自動学習） |

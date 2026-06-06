@@ -35,7 +35,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="EditClone", version="0.6.0", lifespan=lifespan)
+app = FastAPI(title="EditClone", version="0.7.0", lifespan=lifespan)
 
 _origins_env = os.environ.get("CORS_ORIGINS", "http://localhost:3000")
 origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
@@ -59,4 +59,4 @@ app.include_router(projects.router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.6.0"}
+    return {"status": "ok", "version": "0.7.0"}

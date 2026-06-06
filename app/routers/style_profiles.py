@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+import tempfile
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -163,3 +167,68 @@ def ai_refine(profile_id: str, user: dict = Depends(require_user)):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI改善の生成に失敗しました: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Edit DNA — 編集前後ペア分析
+# ---------------------------------------------------------------------------
+
+_PAIR_ALLOWED_EXT = {".mp4", ".mov", ".m4v"}
+
+
+@router.post("/analyze-pair")
+async def analyze_edit_pair(
+    before: UploadFile = File(..., description="未編集の元動画"),
+    after: UploadFile = File(..., description="ユーザーが編集した完成動画"),
+    user: dict = Depends(require_user),
+):
+    """
+    編集前後の動画ペアを分析し、編集スタイル DNA（カット傾向・推奨パラメータ）を返す。
+    動画はサーバーに保存されず、分析後に削除される。
+    """
+    for f, label in [(before, "before"), (after, "after")]:
+        ext = Path(f.filename or "").suffix.lower()
+        if ext not in _PAIR_ALLOWED_EXT:
+            raise HTTPException(status_code=400, detail=f"{label} の拡張子が非対応です: {ext}")
+
+    from app.services.edit_dna import analyze_edit_pair as _analyze
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        uid = str(uuid.uuid4())[:8]
+
+        before_ext = Path(before.filename or "").suffix.lower() or ".mp4"
+        after_ext = Path(after.filename or "").suffix.lower() or ".mp4"
+        before_path = tmp / f"before_{uid}{before_ext}"
+        after_path = tmp / f"after_{uid}{after_ext}"
+
+        before_path.write_bytes(await before.read())
+        after_path.write_bytes(await after.read())
+
+        try:
+            result = _analyze(before_path, after_path)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"分析に失敗しました: {e}")
+
+    return result
+
+
+class ApplyDnaBody(BaseModel):
+    noise_db: float
+    min_silence_seconds: float
+    default_prompt: str = ""
+
+
+@router.post("/{profile_id}/apply-dna")
+def apply_dna(profile_id: str, body: ApplyDnaBody, user: dict = Depends(require_user)):
+    """DNA 分析結果をプロファイルに適用する。"""
+    profile = svc.update_profile(profile_id, user["id"], {
+        "noise_db": body.noise_db,
+        "min_silence_seconds": body.min_silence_seconds,
+        **({"default_prompt": body.default_prompt} if body.default_prompt else {}),
+    })
+    if profile is None:
+        raise HTTPException(status_code=404, detail="プロファイルが見つかりません")
+    return profile

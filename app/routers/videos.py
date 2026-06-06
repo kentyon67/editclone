@@ -1,9 +1,11 @@
 import io
+import tempfile
 import uuid
 import zipfile
 from pathlib import Path
+from typing import List
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from app.middleware.auth import require_user
@@ -185,6 +187,67 @@ def export_srt(video_id: str, user: dict = Depends(require_user)):
         content=srt_content,
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{video_id}.srt"'},
+    )
+
+
+@router.post("/slideshow")
+async def create_slideshow(
+    images: List[UploadFile] = File(..., description="画像ファイル（JPG/PNG/WEBP）"),
+    duration_per_slide: float = Form(3.0, ge=0.5, le=30.0),
+    transition: str = Form("fade"),
+    width: int = Form(1920),
+    height: int = Form(1080),
+    user: dict = Depends(require_user),
+):
+    """
+    複数枚の画像からスライドショー MP4 を生成する。
+    duration_per_slide: 1枚の表示秒数（デフォルト3秒）
+    transition: "fade"（クロスフェード）または "none"（カット切り替え）
+    """
+    allowed_img_ext = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    for img in images:
+        ext = Path(img.filename or "").suffix.lower()
+        if ext not in allowed_img_ext:
+            raise HTTPException(status_code=400, detail=f"非対応の画像形式: {ext}")
+
+    if len(images) > 50:
+        raise HTTPException(status_code=400, detail="画像は最大50枚まで対応しています")
+    if transition not in ("fade", "none"):
+        transition = "none"
+
+    from app.services.slideshow import create_slideshow as _create
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        img_paths: list[Path] = []
+        for i, img_file in enumerate(images):
+            ext = Path(img_file.filename or "").suffix.lower() or ".jpg"
+            dest = tmp / f"img_{i:04d}{ext}"
+            dest.write_bytes(await img_file.read())
+            img_paths.append(dest)
+
+        out_path = tmp / "slideshow.mp4"
+        ok = _create(
+            img_paths, out_path,
+            duration_per_slide=duration_per_slide,
+            width=width, height=height,
+            transition=transition,
+        )
+        if not ok or not out_path.exists():
+            raise HTTPException(status_code=500, detail="スライドショーの生成に失敗しました")
+
+        mp4_bytes = out_path.read_bytes()
+
+    log_event("slideshow_create", user_id=user["id"], metadata={
+        "image_count": len(images),
+        "duration_per_slide": duration_per_slide,
+        "transition": transition,
+    })
+
+    return Response(
+        content=mp4_bytes,
+        media_type="video/mp4",
+        headers={"Content-Disposition": 'attachment; filename="slideshow.mp4"'},
     )
 
 

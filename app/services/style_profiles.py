@@ -181,10 +181,42 @@ def record_feedback(user_id: str, job_id: str, action: str, style_profile_id: Op
             "style_profile_id": style_profile_id,
             "notes": notes,
         }).execute()
+
+        # フィードバックが 5 件ごとに自動でプロンプトを改善する
+        if style_profile_id:
+            try:
+                resp = (
+                    _client().table("feedback_logs")
+                    .select("id", count="exact")
+                    .eq("user_id", user_id)
+                    .eq("style_profile_id", style_profile_id)
+                    .execute()
+                )
+                total = (resp.count or 0)
+                if total > 0 and total % 5 == 0:
+                    _auto_refine_profile(style_profile_id, user_id)
+            except Exception as e:
+                logger.debug("auto-refine check failed: %s", e)
+
         return True
     except Exception as e:
         logger.warning("record_feedback failed: %s", e)
         return False
+
+
+def _auto_refine_profile(profile_id: str, user_id: str) -> None:
+    """フィードバック蓄積時に自動でプロンプトを改善して default_prompt を更新する。"""
+    try:
+        suggested = ai_refine_profile(profile_id, user_id)
+        if suggested:
+            import datetime
+            _client().table("style_profiles").update({
+                "default_prompt": suggested,
+                "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }).eq("id", profile_id).eq("user_id", user_id).execute()
+            logger.info("auto-refined profile %s for user %s", profile_id, user_id)
+    except Exception as e:
+        logger.debug("auto-refine failed: %s", e)
 
 
 # ---------------------------------------------------------------------------
