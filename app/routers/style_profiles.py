@@ -8,12 +8,21 @@ from app.services import style_profiles as svc
 router = APIRouter(prefix="/style-profiles", tags=["style-profiles"])
 
 
+class CaptionStyle(BaseModel):
+    font_size: int = Field(28, ge=12, le=72)
+    position: str = Field("bottom", pattern="^(bottom|top|middle)$")
+    primary_color: str = Field("#FFFFFF", pattern="^#[0-9A-Fa-f]{6}$")
+    outline_color: str = Field("#000000", pattern="^#[0-9A-Fa-f]{6}$")
+    bold: bool = True
+
+
 class ProfileCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
     description: str = ""
     noise_db: float = -30.0
     min_silence_seconds: float = 0.5
     default_prompt: str = ""
+    caption_style: Optional[CaptionStyle] = None
 
 
 class ProfileUpdate(BaseModel):
@@ -22,6 +31,7 @@ class ProfileUpdate(BaseModel):
     noise_db: Optional[float] = None
     min_silence_seconds: Optional[float] = None
     default_prompt: Optional[str] = None
+    caption_style: Optional[CaptionStyle] = None
 
 
 class FeedbackCreate(BaseModel):

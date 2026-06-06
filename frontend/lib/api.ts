@@ -174,6 +174,22 @@ export interface Chapter {
   title: string;
 }
 
+export interface CaptionStyle {
+  font_size: number;
+  position: "bottom" | "top" | "middle";
+  primary_color: string;
+  outline_color: string;
+  bold: boolean;
+}
+
+export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
+  font_size: 28,
+  position: "bottom",
+  primary_color: "#FFFFFF",
+  outline_color: "#000000",
+  bold: true,
+};
+
 export interface StyleProfile {
   id: string;
   user_id: string;
@@ -182,6 +198,7 @@ export interface StyleProfile {
   noise_db: number;
   min_silence_seconds: number;
   default_prompt: string;
+  caption_style: CaptionStyle | null;
   is_active: boolean;
   job_count: number;
   created_at: string;
@@ -208,6 +225,7 @@ export async function createStyleProfile(data: {
   noise_db?: number;
   min_silence_seconds?: number;
   default_prompt?: string;
+  caption_style?: CaptionStyle;
 }): Promise<StyleProfile> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/style-profiles`, {
@@ -221,7 +239,7 @@ export async function createStyleProfile(data: {
 
 export async function updateStyleProfile(
   id: string,
-  data: Partial<{ name: string; description: string; noise_db: number; min_silence_seconds: number; default_prompt: string }>
+  data: Partial<{ name: string; description: string; noise_db: number; min_silence_seconds: number; default_prompt: string; caption_style: CaptionStyle }>
 ): Promise<StyleProfile> {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/style-profiles/${id}`, {

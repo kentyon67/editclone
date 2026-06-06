@@ -375,6 +375,17 @@ def run_job(job_id: str) -> None:
         mp4_bytes: bytes | None = None
         has_subtitles = False
 
+        # アクティブな Style Profile からテロップスタイルを取得
+        caption_style: dict | None = None
+        if job.user_id:
+            try:
+                from app.services.style_profiles import get_active_profile
+                active = get_active_profile(job.user_id)
+                if active and active.get("caption_style"):
+                    caption_style = active["caption_style"]
+            except Exception:
+                pass
+
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmpdir_path = Path(tmpdir)
@@ -391,7 +402,7 @@ def run_job(job_id: str) -> None:
                     if srt_for_mp4.strip():
                         sub_mp4_path = tmpdir_path / f"{job.video_id}_sub.mp4"
                         sub_ok = (
-                            add_subtitles_to_mp4(cut_mp4_path, srt_for_mp4, sub_mp4_path)
+                            add_subtitles_to_mp4(cut_mp4_path, srt_for_mp4, sub_mp4_path, caption_style)
                             and sub_mp4_path.exists()
                         )
                         if sub_ok:

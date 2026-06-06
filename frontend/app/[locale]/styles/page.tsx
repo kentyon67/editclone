@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
-  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit,
+  Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -14,7 +14,8 @@ import {
   listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
   aiRefineProfile, getProfileStats,
   ApiError,
-  type StyleProfile, type ReferenceVideo, type ProfileStats,
+  DEFAULT_CAPTION_STYLE,
+  type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle,
 } from "@/lib/api";
 
 type FormData = {
@@ -23,6 +24,7 @@ type FormData = {
   noise_db: number;
   min_silence_seconds: number;
   default_prompt: string;
+  caption_style: CaptionStyle;
 };
 
 const DEFAULT_FORM: FormData = {
@@ -31,7 +33,134 @@ const DEFAULT_FORM: FormData = {
   noise_db: -30,
   min_silence_seconds: 0.5,
   default_prompt: "",
+  caption_style: { ...DEFAULT_CAPTION_STYLE },
 };
+
+function CaptionStyleSection({
+  value,
+  onChange,
+}: {
+  value: CaptionStyle;
+  onChange: (cs: CaptionStyle) => void;
+}) {
+  const t = useTranslations("styles.form");
+  const [open, setOpen] = useState(false);
+  const set = <K extends keyof CaptionStyle>(k: K, v: CaptionStyle[K]) =>
+    onChange({ ...value, [k]: v });
+
+  const POSITION_OPTIONS: { value: CaptionStyle["position"]; label: string }[] = [
+    { value: "bottom", label: t("captionBottom") },
+    { value: "top", label: t("captionTop") },
+    { value: "middle", label: t("captionMiddle") },
+  ];
+
+  const preview = (
+    <span
+      style={{
+        fontWeight: value.bold ? "bold" : "normal",
+        fontSize: Math.max(10, Math.round(value.font_size * 0.5)),
+        color: value.primary_color,
+        WebkitTextStroke: `1px ${value.outline_color}`,
+        textShadow: `1px 1px 2px ${value.outline_color}`,
+        letterSpacing: "0.01em",
+      }}
+    >
+      {t("captionPreviewText")}
+    </span>
+  );
+
+  return (
+    <div className="border-t border-gray-100 pt-3 mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-purple-600 transition-colors"
+      >
+        <Type className="w-4 h-4" />
+        {t("captionStyle")}
+        <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {/* プレビュー */}
+          <div className="bg-gray-800 rounded-xl h-14 flex items-end justify-center pb-2">
+            {preview}
+          </div>
+
+          {/* フォントサイズ */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">
+              {t("captionFontSize")}: <span className="text-purple-600 font-bold">{value.font_size}px</span>
+            </label>
+            <input
+              type="range" min="16" max="60" step="2" value={value.font_size}
+              onChange={(e) => set("font_size", Number(e.target.value))}
+              className="w-full accent-purple-600"
+            />
+          </div>
+
+          {/* 位置 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{t("captionPosition")}</label>
+            <div className="flex gap-2">
+              {POSITION_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set("position", opt.value)}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    value.position === opt.value
+                      ? "border-purple-400 bg-purple-50 text-purple-700"
+                      : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 文字色 */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t("captionTextColor")}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color" value={value.primary_color}
+                  onChange={(e) => set("primary_color", e.target.value)}
+                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer"
+                />
+                <span className="text-xs text-gray-400 font-mono">{value.primary_color.toUpperCase()}</span>
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-600 mb-1">{t("captionOutlineColor")}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color" value={value.outline_color}
+                  onChange={(e) => set("outline_color", e.target.value)}
+                  className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer"
+                />
+                <span className="text-xs text-gray-400 font-mono">{value.outline_color.toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 太字 */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox" checked={value.bold}
+              onChange={(e) => set("bold", e.target.checked)}
+              className="w-4 h-4 rounded accent-purple-600"
+            />
+            <span className="text-xs font-medium text-gray-600">{t("captionBold")}</span>
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ProfileForm({
   initial,
@@ -46,7 +175,7 @@ function ProfileForm({
   const [form, setForm] = useState<FormData>(initial ?? DEFAULT_FORM);
   const [saving, setSaving] = useState(false);
 
-  const set = (k: keyof FormData, v: string | number) =>
+  const set = (k: keyof Omit<FormData, "caption_style">, v: string | number) =>
     setForm((f) => ({ ...f, [k]: v }));
 
   async function handleSubmit(e: React.FormEvent) {
@@ -121,6 +250,11 @@ function ProfileForm({
           className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-400"
         />
       </div>
+
+      <CaptionStyleSection
+        value={form.caption_style}
+        onChange={(cs) => setForm((f) => ({ ...f, caption_style: cs }))}
+      />
 
       <div className="flex gap-3 pt-2">
         <button
@@ -422,6 +556,12 @@ function ProfileCard({
             <Wand2 className="w-3 h-3" /> {t("aiPromptBadge")}
           </span>
         )}
+        {profile.caption_style && (
+          <span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg flex items-center gap-1">
+            <Type className="w-3 h-3" />
+            {profile.caption_style.font_size}px · {profile.caption_style.position}
+          </span>
+        )}
         {profile.job_count > 0 && (
           <span className="bg-gray-50 px-2 py-1 rounded-lg">
             {t("jobCount", { count: profile.job_count })}
@@ -543,6 +683,7 @@ export default function StylesPage() {
                 noise_db: editingProfile.noise_db,
                 min_silence_seconds: editingProfile.min_silence_seconds,
                 default_prompt: editingProfile.default_prompt,
+                caption_style: editingProfile.caption_style ?? { ...DEFAULT_CAPTION_STYLE },
               }}
               onSave={handleUpdate}
               onCancel={() => setEditingProfile(null)}

@@ -81,6 +81,9 @@ create table if not exists public.style_profiles (
   updated_at timestamptz default now()
 );
 
+-- テロップスタイル設定（フォントサイズ・位置・色・太字）
+alter table public.style_profiles add column if not exists caption_style jsonb default '{"font_size":28,"position":"bottom","primary_color":"#FFFFFF","outline_color":"#000000","bold":true}'::jsonb;
+
 alter table public.style_profiles enable row level security;
 
 -- =====================

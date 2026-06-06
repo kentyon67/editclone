@@ -63,6 +63,15 @@ def get_active_profile(user_id: str) -> Optional[dict]:
         return None
 
 
+_DEFAULT_CAPTION_STYLE = {
+    "font_size": 28,
+    "position": "bottom",
+    "primary_color": "#FFFFFF",
+    "outline_color": "#000000",
+    "bold": True,
+}
+
+
 def create_profile(user_id: str, data: dict) -> Optional[dict]:
     try:
         payload = {
@@ -72,6 +81,7 @@ def create_profile(user_id: str, data: dict) -> Optional[dict]:
             "noise_db": float(data.get("noise_db", -30.0)),
             "min_silence_seconds": float(data.get("min_silence_seconds", 0.5)),
             "default_prompt": data.get("default_prompt", ""),
+            "caption_style": data.get("caption_style") or _DEFAULT_CAPTION_STYLE,
             "is_active": False,
         }
         resp = _client().table("style_profiles").insert(payload).execute()
@@ -82,7 +92,7 @@ def create_profile(user_id: str, data: dict) -> Optional[dict]:
 
 
 def update_profile(profile_id: str, user_id: str, data: dict) -> Optional[dict]:
-    allowed = {"name", "description", "noise_db", "min_silence_seconds", "default_prompt"}
+    allowed = {"name", "description", "noise_db", "min_silence_seconds", "default_prompt", "caption_style"}
     payload = {k: v for k, v in data.items() if k in allowed}
     if not payload:
         return get_profile(profile_id, user_id)
@@ -325,7 +335,7 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
 
     try:
         import anthropic
-        model = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+        model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
         client = anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
             model=model,

@@ -29,6 +29,15 @@ def _get_duration(video_path: Path) -> float:
         return 0.0
 
 
+def _hex_to_ass(hex_color: str) -> str:
+    """#RRGGBB → &H00BBGGRR（ASS 字幕フォーマット、リトルエンディアン BGR）"""
+    h = hex_color.lstrip("#")
+    if len(h) == 6:
+        r, g, b = h[0:2], h[2:4], h[4:6]
+        return f"&H00{b}{g}{r}".upper()
+    return "&H00FFFFFF"
+
+
 def _pick_font(candidates: list[str]) -> str:
     """インストール済みフォントを候補リストから選ぶ。fc-list が使えない場合は先頭を返す。"""
     try:
@@ -77,6 +86,7 @@ def add_subtitles_to_mp4(
     input_mp4: Path,
     srt_content: str,
     output_path: Path,
+    caption_style: dict | None = None,
 ) -> bool:
     """
     MP4 に SRT 字幕（テロップ）を焼き込む。
@@ -100,19 +110,25 @@ def add_subtitles_to_mp4(
         if len(srt_escaped) > 2 and srt_escaped[1] == ":":
             srt_escaped = srt_escaped[0] + "\\:" + srt_escaped[2:]
 
-        # フォント優先順: Noto Sans CJK JP → Noto Sans JP → DejaVu Sans（必ず存在）
+        cs = caption_style or {}
         font = _pick_font(["Noto Sans CJK JP", "Noto Sans JP", "DejaVu Sans", "Arial"])
+        font_size = int(cs.get("font_size", 28))
+        bold = 1 if cs.get("bold", True) else 0
+        primary_color = _hex_to_ass(str(cs.get("primary_color", "#FFFFFF")))
+        outline_color = _hex_to_ass(str(cs.get("outline_color", "#000000")))
+        position = str(cs.get("position", "bottom"))
+        alignment, margin_v = {"top": (8, 20), "middle": (5, 0)}.get(position, (2, 55))
         style = (
             f"Fontname={font},"
-            "Fontsize=28,"
-            "PrimaryColour=&H00FFFFFF,"
-            "OutlineColour=&H00000000,"
+            f"Fontsize={font_size},"
+            f"PrimaryColour={primary_color},"
+            f"OutlineColour={outline_color},"
             "BorderStyle=1,"
             "Outline=3,"
             "Shadow=1,"
-            "MarginV=55,"
-            "Bold=1,"
-            "Alignment=2"
+            f"MarginV={margin_v},"
+            f"Bold={bold},"
+            f"Alignment={alignment}"
         )
 
         cmd = [
