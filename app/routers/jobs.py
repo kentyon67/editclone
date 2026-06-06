@@ -56,6 +56,33 @@ def _fetch_from_storage(path: str) -> bytes:
     return download_result(path)
 
 
+_PROGRESS_PERCENT: list[tuple[str, int]] = [
+    ("完了", 100),
+    ("ファイルをまとめ", 95),
+    ("MP4 をレンダリング", 86),
+    ("EDL", 83),
+    ("Premiere XML", 80),
+    ("FCPXML", 75),
+    ("字幕ファイル", 70),
+    ("チャプター", 65),
+    ("AI", 60),
+    ("無音", 50),
+    ("文字起こし", 20),
+    ("動画情報", 5),
+]
+
+
+def _calc_progress_percent(progress: str, status: str) -> int:
+    if status == "completed":
+        return 100
+    if status == "failed":
+        return 0
+    for keyword, pct in _PROGRESS_PERCENT:
+        if keyword in progress:
+            return pct
+    return 2
+
+
 @router.get("/{job_id}")
 def job_status(job_id: str, user: dict = Depends(require_user)):
     job = _get_owned_job(job_id, user)
@@ -65,6 +92,7 @@ def job_status(job_id: str, user: dict = Depends(require_user)):
         "video_id": job.video_id,
         "status": job.status,
         "progress": job.progress,
+        "progress_percent": _calc_progress_percent(job.progress or "", job.status.value),
         "created_at": job.created_at,
         "completed_at": job.completed_at,
         "error": job.error,

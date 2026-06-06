@@ -2,13 +2,31 @@
 
 var csInterface = typeof CSInterface !== "undefined" ? new CSInterface() : null;
 
+// フロントエンド URL（設定ファイルまたはデフォルト）
+var EDITCLONE_FRONTEND_URL = localStorage.getItem("editclone_frontend_url") || "https://editclone.vercel.app";
+
 // ----- 起動 -----
 
 document.addEventListener("DOMContentLoaded", function () {
   var frame = document.getElementById("app-frame");
   // nle=premiere クエリを付けてプラグインモードで開く
-  var baseUrl = "https://frontend-six-bice-51.vercel.app";
-  frame.src = baseUrl + "/ja/dashboard?nle=premiere";
+  frame.src = EDITCLONE_FRONTEND_URL + "/ja/dashboard?nle=premiere";
+
+  // 設定ボタン
+  var settingsBtn = document.getElementById("settings-btn");
+  if (settingsBtn) {
+    settingsBtn.addEventListener("click", function () {
+      var url = prompt(
+        "EditClone フロントエンド URL を入力してください:",
+        EDITCLONE_FRONTEND_URL
+      );
+      if (url && url.trim()) {
+        EDITCLONE_FRONTEND_URL = url.trim();
+        localStorage.setItem("editclone_frontend_url", EDITCLONE_FRONTEND_URL);
+        frame.src = EDITCLONE_FRONTEND_URL + "/ja/dashboard?nle=premiere";
+      }
+    });
+  }
 
   // iframe からの postMessage を受信する
   window.addEventListener("message", function (event) {

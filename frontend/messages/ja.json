@@ -272,6 +272,7 @@
     "downloadSrt": "SRTをダウンロード",
     "cutSummaryTitle": "カット箇所",
     "cutUnit": "件",
+    "timeSaved": "カット",
     "feedback": {
       "title": "この編集結果はどうでしたか？",
       "accept": "満足",

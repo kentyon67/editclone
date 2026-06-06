@@ -35,10 +35,11 @@ function getProgressStepIndex(progress: string): number {
   return 0;
 }
 
-function ProcessingView({ progress }: { progress: string }) {
+function ProcessingView({ progress, progressPercent }: { progress: string; progressPercent?: number }) {
   const t = useTranslations("processing");
   const steps = ["uploading", "transcribing", "detecting", "generating", "packaging"] as const;
   const activeIndex = getProgressStepIndex(progress);
+  const pct = progressPercent ?? 0;
 
   return (
     <div className="text-center py-16">
@@ -46,7 +47,20 @@ function ProcessingView({ progress }: { progress: string }) {
         <Loader2 className="w-10 h-10 text-white animate-spin" />
       </div>
       <h2 className="text-2xl font-black text-gray-900 mb-2">{t("title")}</h2>
-      <p className="text-gray-500 mb-10">{t("subtitle")}</p>
+      <p className="text-gray-500 mb-6">{t("subtitle")}</p>
+
+      {/* 進捗バー */}
+      <div className="max-w-sm mx-auto mb-8">
+        <div className="flex justify-between text-xs text-gray-400 mb-1">
+          <span>{pct}%</span>
+        </div>
+        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${Math.max(3, pct)}%` }}
+          />
+        </div>
+      </div>
 
       <div className="max-w-sm mx-auto space-y-3">
         {steps.map((step, i) => {
@@ -283,11 +297,27 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
       {/* Cut summary */}
       {result.cuts && result.cuts.length > 0 && (
         <div className="mb-4 bg-white border border-gray-100 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Scissors className="w-4 h-4 text-purple-500" />
-            <span className="font-bold text-gray-900 text-sm">
-              {t("cutSummaryTitle")} ({result.cuts.length}{t("cutUnit")})
-            </span>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Scissors className="w-4 h-4 text-purple-500" />
+              <span className="font-bold text-gray-900 text-sm">
+                {t("cutSummaryTitle")} ({result.cuts.length}{t("cutUnit")})
+              </span>
+            </div>
+            {(() => {
+              const totalSaved = result.cuts.reduce(
+                (sum: number, c: { duration: number }) => sum + (c.duration || 0), 0
+              );
+              if (totalSaved < 0.5) return null;
+              const m = Math.floor(totalSaved / 60);
+              const s = Math.round(totalSaved % 60);
+              const label = m > 0 ? `${m}分${s}秒` : `${s}秒`;
+              return (
+                <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                  -{label} {t("timeSaved")}
+                </span>
+              );
+            })()}
           </div>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {result.cuts.map((cut: { cut_start: number; cut_end: number; duration: number; reason: string; source?: string }, i: number) => (
@@ -477,7 +507,7 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
           </div>
         )}
         {(job?.status === "pending" || job?.status === "processing") && (
-          <ProcessingView progress={job.progress || ""} />
+          <ProcessingView progress={job.progress || ""} progressPercent={job.progress_percent} />
         )}
         {job?.status === "completed" && <ResultsView job={job} />}
       </main>

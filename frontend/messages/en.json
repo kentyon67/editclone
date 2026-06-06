@@ -272,6 +272,7 @@
     "downloadSrt": "Download SRT",
     "cutSummaryTitle": "Cut Points",
     "cutUnit": "cuts",
+    "timeSaved": "saved",
     "feedback": {
       "title": "How was this edit?",
       "accept": "Great",

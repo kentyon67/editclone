@@ -50,12 +50,12 @@ export function importToFCP(jobId: string, token: string, apiBase: string): bool
   }).webkit;
 
   if (wk?.messageHandlers?.editclone) {
+    // 新プロトコル: jobId + token + apiBase を渡して Swift 側で認証付きダウンロード
     wk.messageHandlers.editclone.postMessage({
       action: "importFCPXML",
-      // Swift 側が直接ダウンロードできるよう URL + ファイル名 + 認証トークンを渡す
-      url: `${apiBase}/plugin/jobs/${jobId}/fcpxml`,
-      filename: `editclone_${jobId}.fcpxml`,
+      jobId,
       token,
+      apiBase,
     });
     return true;
   }

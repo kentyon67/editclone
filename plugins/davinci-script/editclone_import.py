@@ -25,11 +25,86 @@ import urllib.error
 from pathlib import Path
 
 # ================================================================
-# ユーザー設定 — 初回実行前に変更してください
+# 設定管理 — 初回起動時に自動的に入力ダイアログが表示されます
 # ================================================================
 
-EDITCLONE_API_URL = "https://your-backend.railway.app"  # Railway バックエンド URL
-EDITCLONE_API_TOKEN = ""  # Supabase JWT トークン（ウェブアプリでログイン後に取得）
+_CONFIG_PATH = Path.home() / ".editclone" / "config.json"
+EDITCLONE_API_URL = ""
+EDITCLONE_API_TOKEN = ""
+
+
+def _load_config() -> tuple[str, str]:
+    """~/.editclone/config.json から URL と Token を読み込む。"""
+    if _CONFIG_PATH.exists():
+        try:
+            data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+            return data.get("api_url", ""), data.get("api_token", "")
+        except Exception:
+            pass
+    return "", ""
+
+
+def _save_config(url: str, token: str) -> None:
+    """設定を保存する。"""
+    _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _CONFIG_PATH.write_text(
+        json.dumps({"api_url": url, "api_token": token}, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def _prompt_config_gui() -> tuple[str, str]:
+    """tkinter ダイアログで URL と Token を入力させる。"""
+    try:
+        import tkinter as tk
+        from tkinter import simpledialog, messagebox
+
+        root = tk.Tk()
+        root.withdraw()
+        root.lift()
+
+        messagebox.showinfo(
+            "EditClone 初期設定",
+            "EditClone API の接続情報を入力してください。\n\n"
+            "トークンの取得方法:\n"
+            "EditClone ウェブアプリ → アカウントページ → Plugin トークン をコピー",
+            parent=root,
+        )
+
+        url = simpledialog.askstring(
+            "EditClone 設定 (1/2)",
+            "EditClone バックエンド URL を入力してください:\n"
+            "例: https://your-app.railway.app",
+            parent=root,
+        )
+        if not url:
+            root.destroy()
+            return "", ""
+
+        token = simpledialog.askstring(
+            "EditClone 設定 (2/2)",
+            "Plugin トークンを貼り付けてください:\n"
+            "(EditClone ウェブアプリ → アカウント → Plugin トークン)",
+            parent=root,
+        )
+        root.destroy()
+        return (url.strip() if url else ""), (token.strip() if token else "")
+    except Exception as e:
+        print(f"[EditClone] tkinter unavailable: {e}")
+        return "", ""
+
+
+def _ensure_config() -> tuple[str, str]:
+    """設定を読み込む。未設定なら GUI で入力して保存する。"""
+    url, token = _load_config()
+    if url and token:
+        return url, token
+
+    url, token = _prompt_config_gui()
+    if url and token:
+        _save_config(url, token)
+        print(f"[EditClone] 設定を保存しました: {_CONFIG_PATH}")
+    return url, token
 
 # ================================================================
 
@@ -176,14 +251,16 @@ def show_dialog(message: str):
 def main():
     print("EditClone Import — Starting...")
 
-    # 設定チェック
-    if not EDITCLONE_API_TOKEN:
-        msg = (
-            "EditClone API トークンが設定されていません。\n"
-            "editclone_import.py の EDITCLONE_API_TOKEN を設定してください。\n"
-            "トークンの取得: EditClone ウェブアプリ → アカウント → API キー"
+    # 設定をロード（未設定なら GUI で入力）
+    global EDITCLONE_API_URL, EDITCLONE_API_TOKEN
+    EDITCLONE_API_URL, EDITCLONE_API_TOKEN = _ensure_config()
+
+    if not EDITCLONE_API_URL or not EDITCLONE_API_TOKEN:
+        show_dialog(
+            "EditClone の設定が完了していません。\n"
+            "スクリプトを再実行して URL と Token を入力してください。\n\n"
+            f"設定ファイル: {_CONFIG_PATH}"
         )
-        show_dialog(msg)
         return
 
     # DaVinci Resolve への接続

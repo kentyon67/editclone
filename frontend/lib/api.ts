@@ -140,6 +140,7 @@ export interface JobStatusResponse {
   video_id: string;
   status: "pending" | "processing" | "completed" | "failed";
   progress: string;
+  progress_percent?: number;
   created_at: string;
   completed_at: string | null;
   error: string | null;
