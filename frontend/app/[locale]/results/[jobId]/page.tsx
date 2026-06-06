@@ -119,6 +119,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [feedbackSent, setFeedbackSent] = useState<string | null>(null);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [linkedProject, setLinkedProject] = useState<Project | null>(null);
+  const [pluginStatus, setPluginStatus] = useState<{ message: string; success: boolean } | null>(null);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -132,6 +133,14 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
       const p = projects.find((proj) => proj.source_job_id === job.job_id);
       if (p) setLinkedProject(p);
     }).catch(() => {});
+
+    function onPluginStatus(e: Event) {
+      const { message, success } = (e as CustomEvent).detail;
+      setPluginStatus({ message, success });
+      setTimeout(() => setPluginStatus(null), 5000);
+    }
+    window.addEventListener("editclone-status", onPluginStatus);
+    return () => window.removeEventListener("editclone-status", onPluginStatus);
   }, [job.job_id]);
 
   async function handleSaveMp4() {
@@ -220,9 +229,10 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
 
       {/* Plugin NLE Import Button */}
       {pluginNLE && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-2">
           <button
             onClick={() => {
+              setPluginStatus(null);
               if (pluginNLE === "fcp") {
                 const sent = importToFCP(job.job_id, sessionToken, API_URL);
                 if (!sent) window.open(downloadUrl);
@@ -237,6 +247,18 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
             <MonitorPlay className="w-5 h-5" />
             {NLE_LABELS[pluginNLE].importLabel}
           </button>
+          {pluginStatus && (
+            <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium ${
+              pluginStatus.success
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-red-50 border border-red-200 text-red-600"
+            }`}>
+              {pluginStatus.success
+                ? <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                : <XCircle className="w-4 h-4 flex-shrink-0" />}
+              {pluginStatus.message}
+            </div>
+          )}
         </div>
       )}
 

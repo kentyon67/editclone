@@ -50,6 +50,7 @@ def build_premiere_xml(
     fps: float = 30.0,
     width: int = 1920,
     height: int = 1080,
+    segments: list[dict] | None = None,
 ) -> str:
     kept = _kept_segments(cuts, total_duration)
     total_frames = _frames(total_duration, fps)
@@ -141,6 +142,23 @@ def build_premiere_xml(
         ET.SubElement(aci, "trackindex").text = "1"
 
         timeline_pos += seg_frames
+
+    # 字幕セグメントをシーケンスマーカーとして埋め込む（Premiere の字幕参照用）
+    if segments:
+        for seg in segments:
+            text = str(seg.get("text", "")).strip()
+            if not text:
+                continue
+            start_f = _frames(float(seg.get("start", 0)), fps)
+            dur_f = max(1, _frames(
+                float(seg.get("end", 0)) - float(seg.get("start", 0)), fps
+            ))
+            marker_el = ET.SubElement(seq, "marker")
+            ET.SubElement(marker_el, "comment").text = text
+            label = text[:28] + "…" if len(text) > 28 else text
+            ET.SubElement(marker_el, "name").text = label
+            ET.SubElement(marker_el, "in").text = str(start_f)
+            ET.SubElement(marker_el, "duration").text = str(dur_f)
 
     raw = ET.tostring(xmeml, encoding="unicode")
     pretty = minidom.parseString(raw).toprettyxml(indent="  ", encoding="UTF-8")

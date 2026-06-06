@@ -41,6 +41,17 @@ def _t(seconds: float) -> str:
     return f"{ms}/1000s"
 
 
+def _hex_to_fcpxml_color(hex_color: str) -> str:
+    """#RRGGBB → 'R G B 1' (FCPXML normalized RGBA, 0.0–1.0)"""
+    h = hex_color.lstrip("#")
+    if len(h) == 6:
+        r = int(h[0:2], 16) / 255.0
+        g = int(h[2:4], 16) / 255.0
+        b = int(h[4:6], 16) / 255.0
+        return f"{r:.4f} {g:.4f} {b:.4f} 1"
+    return "1 1 1 1"
+
+
 def _kept_segments(
     silence: list[dict], total: float
 ) -> list[tuple[float, float]]:
@@ -64,8 +75,10 @@ def build_fcpxml(
     cuts: list[dict] | None = None,
     video_info: dict | None = None,
     segments: list[dict] | None = None,
+    caption_style: dict | None = None,
 ) -> str:
-    """FCPXML を生成する。segments を渡すと caption lane として字幕を埋め込む。"""
+    """FCPXML を生成する。segments を渡すと caption lane として字幕を埋め込む。
+    caption_style は Style Profile の caption_style dict。"""
     if video_info is None:
         video_info = extract_video_info(video_path)
 
@@ -114,14 +127,22 @@ def build_fcpxml(
 
     # 字幕スタイル定義（segments がある場合のみ追加）
     if segments:
+        cs = caption_style or {}
+        font_size = str(int(cs.get("font_size", 36)))
+        bold = "1" if cs.get("bold", True) else "0"
+        font_face = "Bold" if bold == "1" else "Regular"
+        font_color = _hex_to_fcpxml_color(str(cs.get("primary_color", "#FFFFFF")))
+        shadow_parts = _hex_to_fcpxml_color(str(cs.get("outline_color", "#000000"))).split()
+        shadow_color = f"{shadow_parts[0]} {shadow_parts[1]} {shadow_parts[2]} 0.75"
+
         ts_def = ET.SubElement(resources, "text-style-def", {"id": ts_id})
         ET.SubElement(ts_def, "text-style", {
             "font": ".AppleSystemUIFont",
-            "fontSize": "36",
-            "fontFace": "Regular",
-            "fontColor": "1 1 1 1",
-            "bold": "1",
-            "shadowColor": "0 0 0 0.75",
+            "fontSize": font_size,
+            "fontFace": font_face,
+            "fontColor": font_color,
+            "bold": bold,
+            "shadowColor": shadow_color,
             "shadowOffset": "5 315",
             "shadowBlurRadius": "4",
             "alignment": "center",

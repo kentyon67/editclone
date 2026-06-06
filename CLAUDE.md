@@ -87,8 +87,12 @@
 | DaVinci EDL 出力 | ✅ | `app/services/edl.py` |
 | Caption Style カスタマイズ（フォント・位置・色・太字） | ✅ | `app/services/mp4_render.py`, `app/routers/style_profiles.py` |
 | Style Profile → MP4 字幕焼き込み連動 | ✅ | `app/services/jobs.py` |
+| Style Profile → FCPXML テキストスタイル反映 | ✅ | `app/services/fcpxml.py` |
+| Premiere XML への字幕マーカー追加 | ✅ | `app/services/premiere_xml.py` |
 | ZIP 構造整理（fcp/premiere/davinci/subtitles/media） | ✅ | `app/services/jobs.py` |
-| カット点音声クロスフェード | ⏳ | 未実装（クリックノイズ対策） |
+| カット点音声クロスフェード（20ms afade） | ✅ | `app/services/mp4_render.py` |
+| AI カット粒度改善（raw_segments 使用） | ✅ | `app/services/jobs.py` |
+| AI 編集プロンプト改善（英日対応・フィラーリスト） | ✅ | `app/services/ai_edit.py` |
 | 画像・写真スライド動画化 | ⏳ | 未実装 |
 | ズーム演出・B-roll 提案 | ⏳ | 未実装 |
 

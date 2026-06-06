@@ -72,9 +72,14 @@
 - [x] Style Profile → MP4 字幕焼き込みへの反映
 - [x] ZIP 構造整理（fcp/ + premiere/ + davinci/ + subtitles/ + media/）
 
+**完了済み（追加）:**
+- [x] カット点での音声クロスフェード（各セグメントに 20ms afade を付与）
+- [x] テロップスタイルの FCPXML への反映（font_size / color / bold → text-style-def）
+- [x] Premiere XML への字幕マーカー追加（セグメントをシーケンスマーカーとして埋め込み）
+- [x] AI カット粒度改善（Whisper raw_segments 使用で細粒度カットが可能に）
+- [x] AI 編集プロンプト改善（英日バイリンガル対応・フィラーワードリスト追加）
+
 **残タスク:**
-- [ ] カット点での音声クロスフェード（現状は無処理のためクリックノイズが出る可能性あり）
-- [ ] テロップスタイルの FCPXML/Premiere XML への反映（現状は焼き込みのみ）
 - [ ] 画像・写真スライド動画化
 - [ ] ズーム演出・B-roll 提案
 

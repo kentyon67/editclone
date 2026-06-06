@@ -336,10 +336,12 @@ def run_job(job_id: str) -> None:
         silence_cuts = suggest_cuts(path, noise_db=job.noise_db, min_duration=job.min_duration)
 
         # プロンプトがあれば Claude API でセマンティックカット提案を追加
+        # raw_segments は Whisper の元セグメントで粒度が細かく、AI カットの精度が上がる
         if job.prompt:
             job.progress = "AIが編集指示を解析中..."
+            ai_cut_segments = transcript.get("raw_segments") or transcript["segments"]
             ai_cuts = analyze_transcript_for_cuts(
-                transcript["segments"], job.prompt, transcript["transcript"],
+                ai_cut_segments, job.prompt, transcript["transcript"],
                 total_duration=total_duration,
             )
             cuts = merge_cuts(silence_cuts, ai_cuts)
@@ -353,29 +355,7 @@ def run_job(job_id: str) -> None:
         job.progress = "字幕ファイル生成中..."
         srt_content = segments_to_srt(transcript["segments"])
 
-        job.progress = "FCPXMLを生成中..."
-        remapped_segs_for_fcpxml = remap_segments_for_cuts(
-            transcript["segments"], cuts, total_duration
-        )
-        fcpxml_content = build_fcpxml(
-            path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts,
-            video_info=info, segments=remapped_segs_for_fcpxml,
-        )
-
-        job.progress = "Premiere XML を生成中..."
-        premiere_xml_content = build_premiere_xml(
-            path, cuts=cuts, total_duration=total_duration,
-            fps=fps, width=width, height=height,
-        )
-
-        job.progress = "EDL を生成中..."
-        edl_content = build_edl(path, cuts=cuts, total_duration=total_duration, fps=fps)
-
-        job.progress = "MP4 をレンダリング中..."
-        mp4_bytes: bytes | None = None
-        has_subtitles = False
-
-        # アクティブな Style Profile からテロップスタイルを取得
+        # アクティブな Style Profile からテロップスタイルを事前取得（全出力に使用）
         caption_style: dict | None = None
         if job.user_id:
             try:
@@ -385,6 +365,30 @@ def run_job(job_id: str) -> None:
                     caption_style = active["caption_style"]
             except Exception:
                 pass
+
+        job.progress = "FCPXMLを生成中..."
+        remapped_segs_for_fcpxml = remap_segments_for_cuts(
+            transcript["segments"], cuts, total_duration
+        )
+        fcpxml_content = build_fcpxml(
+            path, noise_db=job.noise_db, min_duration=job.min_duration, cuts=cuts,
+            video_info=info, segments=remapped_segs_for_fcpxml,
+            caption_style=caption_style,
+        )
+
+        job.progress = "Premiere XML を生成中..."
+        premiere_xml_content = build_premiere_xml(
+            path, cuts=cuts, total_duration=total_duration,
+            fps=fps, width=width, height=height,
+            segments=remapped_segs_for_fcpxml,
+        )
+
+        job.progress = "EDL を生成中..."
+        edl_content = build_edl(path, cuts=cuts, total_duration=total_duration, fps=fps)
+
+        job.progress = "MP4 をレンダリング中..."
+        mp4_bytes: bytes | None = None
+        has_subtitles = False
 
         try:
             with tempfile.TemporaryDirectory() as tmpdir:

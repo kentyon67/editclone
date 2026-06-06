@@ -28,6 +28,7 @@ struct EditCloneWebView: NSViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
+        context.coordinator.webView = webView  // JS コールバック用に弱参照を渡す
         webView.load(URLRequest(url: url))
         return webView
     }
@@ -37,6 +38,8 @@ struct EditCloneWebView: NSViewRepresentable {
     // MARK: - Coordinator
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+
+        weak var webView: WKWebView?
 
         // JavaScript から届くメッセージを処理する
         func userContentController(
@@ -154,10 +157,17 @@ struct EditCloneWebView: NSViewRepresentable {
         // MARK: - Web アプリへ結果通知
 
         private func notifyWebApp(message: String, success: Bool) {
-            // WKWebView への参照は Coordinator が直接持たないため CustomEvent で通知
-            // EditCloneWebView の makeNSView で生成した webView に対して evalJS を送る方法は
-            // NSApplication の delegate 等経由が必要なため、ここではログのみ。
-            // フロントエンド側は window.addEventListener('editclone-status') で受け取る。
+            let escaped = message
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "'", with: "\\'")
+            let js = """
+            window.dispatchEvent(new CustomEvent('editclone-status', {
+              detail: { message: '\(escaped)', success: \(success ? "true" : "false") }
+            }));
+            """
+            DispatchQueue.main.async { [weak self] in
+                self?.webView?.evaluateJavaScript(js, completionHandler: nil)
+            }
             print("[EditClone FCP] \(success ? "✓" : "✗") \(message)")
         }
 
