@@ -14,7 +14,7 @@ import {
 } from "@/lib/api";
 
 const PLANS = [
-  { key: "free", price: "¥0", limit_ja: "月3本 / 最大3分", limit_en: "3/mo · up to 3 min" },
+  { key: "free", price: "¥0", limit_ja: "月5本 / 最大5分", limit_en: "5/mo · up to 5 min" },
   { key: "pro", price: "¥980/月", limit_ja: "月30本 / 最大15分", limit_en: "30/mo · up to 15 min" },
   { key: "creator", price: "¥2,980/月", limit_ja: "月100本 / 最大60分", limit_en: "100/mo · up to 60 min" },
   { key: "studio", price: "¥9,800/月", limit_ja: "無制限", limit_en: "Unlimited" },

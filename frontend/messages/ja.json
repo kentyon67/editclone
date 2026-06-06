@@ -87,7 +87,7 @@
         "price": "¥0",
         "period": "ずっと無料",
         "description": "まず試してみたい方へ",
-        "features": ["月3本 / 最大3分", "無音カット・字幕・チャプター", "FCPXML出力", "SRT字幕", "MP4出力"],
+        "features": ["月5本 / 最大5分", "無音カット・字幕・チャプター", "FCPXML出力", "SRT字幕", "MP4出力"],
         "cta": "無料で始める",
         "highlighted": false
       },

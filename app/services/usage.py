@@ -6,14 +6,14 @@ SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
 
 PLAN_LIMITS: dict[str, int | None] = {
-    "free": 3,
+    "free": 5,
     "pro": 30,
     "creator": 100,
     "studio": None,
 }
 
 PLAN_MAX_DURATIONS: dict[str, float | None] = {
-    "free": 180.0,
+    "free": 300.0,
     "pro": 900.0,
     "creator": 3600.0,
     "studio": None,
