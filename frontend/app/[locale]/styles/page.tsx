@@ -827,6 +827,7 @@ function AccuracySection({ profileId }: { profileId: string }) {
 
 export default function StylesPage() {
   const t = useTranslations("styles");
+  const locale = useLocale();
   const [profiles, setProfiles] = useState<StyleProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);

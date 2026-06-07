@@ -393,6 +393,7 @@ do $$
 begin
   drop policy if exists "Owners can manage their team" on public.team_members;
   drop policy if exists "Members can view their invites" on public.team_members;
+  drop policy if exists "Members can accept invites" on public.team_members;
 end;
 $$;
 

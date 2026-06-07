@@ -60,12 +60,21 @@ def _save_config(url: str, token: str) -> None:
 # API ヘルパー
 # ================================================================
 
+def _add_auth_header(req: urllib.request.Request) -> None:
+    """eck_ プレフィックスの API キーは X-Api-Key、それ以外は Bearer で送信。"""
+    if not _API_TOKEN:
+        return
+    if _API_TOKEN.startswith("eck_"):
+        req.add_header("X-Api-Key", _API_TOKEN)
+    else:
+        req.add_header("Authorization", f"Bearer {_API_TOKEN}")
+
+
 def api_request(method: str, endpoint: str, payload: dict | None = None, timeout: int = 30) -> dict:
     url = f"{_API_URL}{endpoint}"
     data = json.dumps(payload).encode("utf-8") if payload else None
     req = urllib.request.Request(url, data=data, method=method)
-    if _API_TOKEN:
-        req.add_header("Authorization", f"Bearer {_API_TOKEN}")
+    _add_auth_header(req)
     if data:
         req.add_header("Content-Type", "application/json")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -83,8 +92,7 @@ def api_post(endpoint: str, payload: dict | None = None, timeout: int = 30) -> d
 def download_bytes(url_path: str, timeout: int = 120) -> bytes:
     url = f"{_API_URL}{url_path}"
     req = urllib.request.Request(url)
-    if _API_TOKEN:
-        req.add_header("Authorization", f"Bearer {_API_TOKEN}")
+    _add_auth_header(req)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
