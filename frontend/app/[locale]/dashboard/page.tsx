@@ -74,7 +74,7 @@ export default function DashboardPage() {
 
     Promise.allSettled([
       getUserUsage().then(setUsage).catch(() =>
-        setUsage({ plan: "free", used: 0, limit: 3, remaining: 3, max_duration_seconds: 180 })
+        setUsage({ plan: "free", used: 0, limit: 5, remaining: 5, max_duration_seconds: 300 })
       ),
       getUserJobs().then((d) => setJobs(d.jobs)).catch(() => {}),
       listProjects().then((d) => setProjects(d.projects)).catch(() => {}),

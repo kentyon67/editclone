@@ -35,12 +35,14 @@ export default function AccountPage() {
   const [creatingKey, setCreatingKey] = useState(false);
   const [newRawKey, setNewRawKey] = useState("");
   const [newKeyCopied, setNewKeyCopied] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState("");
   // Webhook state
   const [webhooks, setWebhooks] = useState<WebhookType[]>([]);
   const [newWebhookUrl, setNewWebhookUrl] = useState("");
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [webhookSecret, setWebhookSecret] = useState("");
   const [webhookSecretCopied, setWebhookSecretCopied] = useState(false);
+  const [webhookError, setWebhookError] = useState("");
   // Team state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -98,12 +100,16 @@ export default function AccountPage() {
   async function handleCreateApiKey() {
     if (!newKeyName.trim()) return;
     setCreatingKey(true);
+    setApiKeyError("");
     try {
       const key = await createApiKey(newKeyName.trim());
       setApiKeys((prev) => [key, ...prev]);
       setNewRawKey(key.raw_key ?? "");
       setNewKeyName("");
-    } catch { /* silent */ } finally {
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setApiKeyError(err?.message ?? "APIキーの生成に失敗しました");
+    } finally {
       setCreatingKey(false);
     }
   }
@@ -116,12 +122,16 @@ export default function AccountPage() {
   async function handleCreateWebhook() {
     if (!newWebhookUrl.trim()) return;
     setCreatingWebhook(true);
+    setWebhookError("");
     try {
       const wh = await createWebhook(newWebhookUrl.trim());
       setWebhooks((prev) => [wh, ...prev]);
       setWebhookSecret(wh.secret ?? "");
       setNewWebhookUrl("");
-    } catch { /* silent */ } finally {
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      setWebhookError(err?.message ?? "Webhookの登録に失敗しました");
+    } finally {
       setCreatingWebhook(false);
     }
   }
@@ -312,6 +322,10 @@ export default function AccountPage() {
               </button>
             </div>
 
+            {apiKeyError && (
+              <p className="text-xs text-red-500 mb-2">{apiKeyError}</p>
+            )}
+
             {/* 生成直後のキー表示 */}
             {newRawKey && (
               <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
@@ -391,6 +405,10 @@ export default function AccountPage() {
                 追加
               </button>
             </div>
+
+            {webhookError && (
+              <p className="text-xs text-red-500 mb-2">{webhookError}</p>
+            )}
 
             {/* シークレット表示 */}
             {webhookSecret && (
