@@ -53,11 +53,13 @@ export default function AccountPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) setEmail(data.user.email);
-    });
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.access_token) setToken(data.session.access_token);
+      if (!data.session) {
+        router.push(`/${locale}/login`);
+        return;
+      }
+      setToken(data.session.access_token);
+      setEmail(data.session.user?.email ?? "");
     });
     getUserUsage().then((u) => {
       setUsage(u);
@@ -67,7 +69,7 @@ export default function AccountPage() {
     }).catch(() => {});
     listApiKeys().then(setApiKeys).catch(() => {});
     listWebhooks().then(setWebhooks).catch(() => {});
-  }, []);
+  }, [locale, router]);
 
   async function handleInvite() {
     if (!inviteEmail.trim()) return;
