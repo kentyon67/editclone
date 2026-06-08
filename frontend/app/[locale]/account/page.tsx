@@ -109,8 +109,9 @@ export default function AccountPage() {
       setNewRawKey(key.raw_key ?? "");
       setNewKeyName("");
     } catch (e: unknown) {
-      const err = e as { message?: string };
-      setApiKeyError(err?.message ?? "APIキーの生成に失敗しました");
+      const err = e as { message?: string; statusCode?: number };
+      const code = err?.statusCode ? ` [HTTP ${err.statusCode}]` : "";
+      setApiKeyError((err?.message ?? "APIキーの生成に失敗しました") + code);
     } finally {
       setCreatingKey(false);
     }
