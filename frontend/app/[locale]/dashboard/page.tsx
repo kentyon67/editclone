@@ -114,7 +114,7 @@ export default function DashboardPage() {
           <p className="text-gray-500 mt-1">{t("subtitle")}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {/* プランカード */}
           <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
             <p className="text-sm text-gray-500 mb-1">{t("plan")}</p>
@@ -122,6 +122,19 @@ export default function DashboardPage() {
               <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
             ) : (
               <p className="text-2xl font-black text-purple-600 capitalize">{plan}</p>
+            )}
+          </div>
+
+          {/* 今月処理本数カード */}
+          <div className="bg-white rounded-2xl p-5 border border-purple-100 shadow-sm">
+            <p className="text-sm text-gray-500 mb-1">{t("processed")}</p>
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            ) : (
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-black text-gray-900">{used}</p>
+                <Film className="w-5 h-5 text-purple-400 mb-0.5" />
+              </div>
             )}
           </div>
 

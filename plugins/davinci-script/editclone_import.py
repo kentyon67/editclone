@@ -195,13 +195,50 @@ def get_media_pool_clips(resolve) -> list:
         return []
 
 
-def apply_cuts_to_timeline(resolve, media_clip, cuts: list, fps: float, name: str):
+def cuts_to_keep_segments(cuts: list, total_duration: float) -> list:
+    """
+    カット（削除）セグメント [{"cut_start":s,"cut_end":e},...] から
+    保持セグメント [{"start":s,"end":e},...] を計算して返す。
+    ジョブ結果の cuts フォーマット(cut_start/cut_end)とチャット操作の
+    keep_segments フォーマット(start/end)の両方を自動判定する。
+    """
+    if not cuts:
+        return [{"start": 0.0, "end": total_duration}] if total_duration > 0 else []
+
+    # keep_segments 形式 (start/end) が既に渡された場合はそのまま返す
+    if "start" in cuts[0] or "end" in cuts[0]:
+        return cuts
+
+    # cut_start/cut_end 形式から保持区間を算出
+    kept = []
+    cursor = 0.0
+    for cut in sorted(cuts, key=lambda c: float(c.get("cut_start", 0))):
+        s = float(cut.get("cut_start", 0))
+        e = float(cut.get("cut_end", 0))
+        if s > cursor + 0.05:
+            kept.append({"start": round(cursor, 3), "end": round(s, 3)})
+        cursor = max(cursor, e)
+    if total_duration > 0 and cursor < total_duration - 0.05:
+        kept.append({"start": round(cursor, 3), "end": round(total_duration, 3)})
+    return kept
+
+
+def apply_cuts_to_timeline(resolve, media_clip, cuts: list, fps: float, name: str,
+                           total_duration: float = 0.0):
+    """
+    cuts には keep_segments 形式(start/end) または job cuts 形式(cut_start/cut_end) を渡せる。
+    どちらも自動判定して正しいタイムラインを生成する。
+    """
     project = resolve.GetProjectManager().GetCurrentProject()
     if not project:
         return None, "アクティブなプロジェクトがありません"
     media_pool = project.GetMediaPool()
+
+    # フォーマット統一
+    keep_segs = cuts_to_keep_segments(cuts, total_duration)
+
     infos = []
-    for seg in cuts:
+    for seg in keep_segs:
         sf = round(float(seg.get("start", 0)) * fps)
         ef = round(float(seg.get("end",   0)) * fps)
         if ef > sf:
@@ -277,28 +314,32 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
         if not segs:
             return "⚠", "keep_segments が空です"
         fps  = float(job_ctx.get("fps", 30))
+        dur  = float(job_ctx.get("duration", 0))
         clip = source_clip or get_source_clip_from_current_timeline(resolve)
         if not clip:
             return "✗", "ソースクリップが見つかりません（メディアプールにクリップが必要）"
         tl_name = f"EditClone_{int(time.time()) % 10000}"
-        _, result = apply_cuts_to_timeline(resolve, clip, segs, fps, tl_name)
+        _, result = apply_cuts_to_timeline(resolve, clip, segs, fps, tl_name,
+                                           total_duration=dur)
         if result == "ok":
             return "✓", f"タイムライン作成: {len(segs)} セグメント"
         return "✗", result
 
     # ── トリム（冒頭/末尾削除） ────────────────────────────
     if op_type == "trim":
-        start_s = float(op.get("start_seconds", 0))
-        end_s   = float(op.get("end_seconds",   0))
+        start_s  = float(op.get("start_seconds", 0))
+        end_s    = float(op.get("end_seconds",   0))
         duration = float(job_ctx.get("duration", 0))
-        cuts = job_ctx.get("cuts") or []
-        if not cuts and duration > 0:
-            cuts = [{"start": 0.0, "end": duration}]
+        raw_cuts = job_ctx.get("cuts") or []
+        # cut_start/cut_end 形式 → start/end 形式に変換
+        keep_segs = cuts_to_keep_segments(raw_cuts, duration)
+        if not keep_segs and duration > 0:
+            keep_segs = [{"start": 0.0, "end": duration}]
         new_segs = []
-        for seg in cuts:
-            s = max(seg["start"], start_s)
-            e = min(seg["end"],   duration - end_s) if end_s > 0 else seg["end"]
-            if e > s:
+        for seg in keep_segs:
+            s = max(float(seg["start"]), start_s)
+            e = min(float(seg["end"]), duration - end_s) if end_s > 0 else float(seg["end"])
+            if e > s + 0.05:
                 new_segs.append({"start": s, "end": e})
         if not new_segs:
             return "⚠", "トリム後にセグメントが残りません"
@@ -770,7 +811,8 @@ def run_gui():
                 except Exception:
                     clip_name = "clip"
                 tl_name = f"EditClone_{clip_name[:18]}"
-                _, result = apply_cuts_to_timeline(resolve, media_clip, cuts, fps, tl_name)
+                _, result = apply_cuts_to_timeline(resolve, media_clip, cuts, fps, tl_name,
+                                                   total_duration=dur)
 
                 if result != "ok":
                     raise RuntimeError(f"タイムライン生成失敗: {result}")
@@ -1038,22 +1080,50 @@ def run_gui():
 
         def _worker():
             try:
+                # 複数指示またはプロンプト長 > 20 文字の場合はエージェントチームを使用
+                use_teams = len(msg) > 20 or "," in msg or "、" in msg
+                payload = {
+                    "prompt": msg,
+                    "history": _chat_history[-10:],
+                    "use_teams": use_teams,
+                }
+                if use_teams:
+                    _set_cst("🤖 エージェントチーム起動中...", MUTED)
                 resp = api_post(
-                    f"/plugin/jobs/{_state['job_id']}/chat-edit",
-                    {"prompt": msg, "history": _chat_history[-10:]},
-                    timeout=60,
+                    f"/plugin/jobs/{_state['job_id']}/team-edit",
+                    payload,
+                    timeout=120,
                 )
-                ops             = resp.get("operations") or []
-                fps             = float(resp.get("fps") or _state["fps"])
-                duration        = float(resp.get("duration") or _state["duration"])
-                srt_avail       = resp.get("srt_available", _state["srt_available"])
-                needs_fcpxml    = resp.get("needs_fcpxml_import", False)
+                ops              = resp.get("operations") or []
+                fps              = float(resp.get("fps") or _state["fps"])
+                duration         = float(resp.get("duration") or _state["duration"])
+                srt_avail        = resp.get("srt_available", _state["srt_available"])
+                needs_fcpxml     = resp.get("needs_fcpxml_import", False)
+                agent_reports    = resp.get("agent_reports") or {}
+                synthesis        = resp.get("synthesis") or ""
+                agents_succeeded = resp.get("agents_succeeded") or []
 
-                st_set("fps",          fps)
-                st_set("duration",     duration)
+                st_set("fps",           fps)
+                st_set("duration",      duration)
                 st_set("srt_available", srt_avail)
 
-                op_summary = "、".join(
+                # エージェントチームを使用した場合は各エージェントのレポートを表示
+                if agent_reports:
+                    agent_count = len(agents_succeeded)
+                    _append_chat("system", f"ℹ {agent_count} エージェント協調完了")
+                    label_map = {
+                        "cut_agent":    "cut専門家",
+                        "style_agent":  "style専門家",
+                        "pacing_agent": "pacing専門家",
+                        "hook_agent":   "hook専門家",
+                    }
+                    for agent_name, report in agent_reports.items():
+                        if report and not report.startswith("("):
+                            preview = report[:100].replace("\n", " ")
+                            label = label_map.get(agent_name, agent_name)
+                            _append_chat("system", f"🤖 [{label}] {preview}...")
+
+                op_summary = synthesis if synthesis else "、".join(
                     op.get("description") or op.get("type", "?")
                     for op in ops
                 ) or "操作なし"

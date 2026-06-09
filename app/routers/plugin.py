@@ -36,6 +36,12 @@ class ChatEditRequest(BaseModel):
     history: list = []
 
 
+class TeamEditRequest(BaseModel):
+    prompt: str
+    history: list = []
+    use_teams: bool = False
+
+
 class RichFcpxmlRequest(BaseModel):
     operations: list = []
 
@@ -425,6 +431,85 @@ def plugin_chat_edit(
         "duration": duration,
         "srt_available": bool(result.get("srt")),
         "needs_fcpxml_import": needs_fcpxml,
+    }
+
+
+@router.post("/jobs/{job_id}/team-edit")
+def plugin_team_edit(
+    job_id: str,
+    body: TeamEditRequest,
+    user: dict = Depends(require_user),
+):
+    """
+    エージェントチームによる AI 編集。
+    use_teams=True またはプロンプトが複雑な場合は複数エージェントを並列実行する。
+    単純なプロンプトの場合は通常の parse_edit_prompt にフォールバックする。
+    /chat-edit と同じレスポンス形式 + agent_reports フィールドを返す。
+    """
+    job = get_job(job_id)
+    if not job or job.user_id != user["id"]:
+        raise HTTPException(404, "Job not found")
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    transcript = result.get("transcript") or {}
+    current_cuts = result.get("cuts") or []
+    info = result.get("info") or {}
+    fps = float(info.get("fps", 30))
+    duration = float(info.get("duration_seconds", 0))
+
+    from app.services.agent_teams import run_agent_team, should_use_teams
+    from app.services.interactive_edit import parse_edit_prompt
+
+    use_team_mode = body.use_teams or should_use_teams(body.prompt)
+
+    if use_team_mode:
+        team_result = run_agent_team(
+            transcript=transcript,
+            cuts=current_cuts,
+            duration=duration,
+            fps=fps,
+            user_prompt=body.prompt,
+            history=body.history,
+        )
+        operations = team_result["operations"]
+        agent_reports = team_result["agent_reports"]
+        synthesis = team_result["synthesis"]
+        agents_succeeded = team_result["agents_succeeded"]
+        agents_failed = team_result["agents_failed"]
+    else:
+        # シンプルなプロンプト → 通常の単一エージェント呼び出し
+        operations = parse_edit_prompt(
+            prompt=body.prompt,
+            transcript=transcript,
+            current_cuts=current_cuts,
+            duration=duration,
+            fps=fps,
+            history=body.history,
+        )
+        agent_reports = {}
+        synthesis = ""
+        agents_succeeded = []
+        agents_failed = []
+
+    needs_fcpxml = any(
+        op.get("type") in ("speed", "transition", "text", "color")
+        for op in operations
+    )
+
+    return {
+        "operations": operations,
+        "job_id": job_id,
+        "fps": fps,
+        "duration": duration,
+        "srt_available": bool(result.get("srt")),
+        "needs_fcpxml_import": needs_fcpxml,
+        "agent_reports": agent_reports,
+        "synthesis": synthesis,
+        "agents_succeeded": agents_succeeded,
+        "agents_failed": agents_failed,
+        "used_team_mode": use_team_mode,
     }
 
 
