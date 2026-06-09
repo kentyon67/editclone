@@ -15,6 +15,7 @@ let allJobs = [];
 let activeStyles = [];
 let agentPollingTimer = null;
 let pendingAgentJobId = null;
+let chatHistory = [];  // [{role, content}]
 
 // ---- DOM helpers ----
 const $ = (id) => document.getElementById(id);
@@ -95,6 +96,143 @@ async function verifyAndInitAgent() {
 }
 
 // ===========================================================================
+// Chat Tab (instant interactive editing via team-edit → rich-premiere-xml)
+// ===========================================================================
+
+function populateChatJobSelect() {
+  const sel = $("chat-job-select");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- 動画を選択 --</option>';
+  allJobs.forEach((job) => {
+    const opt = document.createElement("option");
+    opt.value = job.job_id;
+    opt.textContent = `${job.video_name || job.filename} (${formatDate(job.created_at)})`;
+    sel.appendChild(opt);
+  });
+  if (prev) sel.value = prev;
+}
+
+function appendChatMsg(role, text) {
+  const history = $("chat-history");
+  if (!history) return;
+  const div = document.createElement("div");
+  div.className = `chat-msg chat-msg-${role}`;
+  div.textContent = text;
+  history.appendChild(div);
+  history.scrollTop = history.scrollHeight;
+}
+
+function setChatStatus(msg, type) {
+  const el = $("chat-status");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `chat-status chat-status-${type || "info"}`;
+  el.classList.remove("hidden");
+}
+
+function hideChatStatus() {
+  const el = $("chat-status");
+  if (el) el.classList.add("hidden");
+}
+
+async function sendChatMessage() {
+  const jobId = $("chat-job-select")?.value;
+  const input = $("chat-input");
+  const msg = input?.value?.trim();
+
+  if (!jobId) { setChatStatus("対象ジョブを選択してください", "error"); return; }
+  if (!msg) { setChatStatus("編集指示を入力してください", "error"); return; }
+
+  appendChatMsg("user", msg);
+  if (input) input.value = "";
+  hideChatStatus();
+
+  const btn = $("btn-chat-send");
+  if (btn) { btn.disabled = true; btn.textContent = "AI 処理中..."; }
+
+  const useTeams = msg.length > 20 || msg.includes(",") || msg.includes("、");
+
+  try {
+    // 1. team-edit: 即時で操作リストを取得 (2-5秒)
+    setChatStatus(useTeams ? "🤖 エージェントチーム起動中..." : "AI 解析中...", "info");
+    const teamRes = await fetch(`${API_BASE}/plugin/jobs/${jobId}/team-edit`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        prompt: msg,
+        history: chatHistory.slice(-10),
+        use_teams: useTeams,
+      }),
+    });
+    if (!teamRes.ok) throw new Error(`team-edit HTTP ${teamRes.status}`);
+    const teamData = await teamRes.json();
+
+    const ops = teamData.operations || [];
+    const synthesis = teamData.synthesis ||
+      ops.map((o) => o.description || o.type).filter(Boolean).join("、") ||
+      "操作なし";
+
+    appendChatMsg("assistant", synthesis);
+    chatHistory.push({ role: "user", content: msg });
+    chatHistory.push({ role: "assistant", content: synthesis });
+
+    // エージェントチーム使用時の補足表示
+    if (teamData.agents_succeeded && teamData.agents_succeeded.length > 0) {
+      appendChatMsg("system", `🤖 ${teamData.agents_succeeded.length} エージェント協調完了`);
+    }
+
+    if (ops.length === 0) {
+      appendChatMsg("system", "ℹ 操作なし（指示を変えてお試しください）");
+      return;
+    }
+
+    // 2. rich-premiere-xml: 操作を反映した XML を即時生成 (1-2秒)
+    setChatStatus("Premiere XML を生成中...", "info");
+    const xmlRes = await fetch(`${API_BASE}/plugin/jobs/${jobId}/rich-premiere-xml`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ operations: ops }),
+    });
+    if (!xmlRes.ok) throw new Error(`rich-premiere-xml HTTP ${xmlRes.status}`);
+    const xmlText = await xmlRes.text();
+
+    // 3. UXP ファイルシステムに保存して Premiere Pro にインポート
+    setChatStatus("Premiere Pro にインポート中...", "info");
+    const tempFolder = await fs.getTemporaryFolder();
+    const xmlFile = await tempFolder.createFile(
+      `editclone_chat_${jobId}_${Date.now()}.xml`,
+      { overwrite: true }
+    );
+    await xmlFile.write(xmlText, { format: storage.formats.utf8 });
+
+    const ppCore = require("premierePro");
+    const app = ppCore.app;
+    if (!app.project) {
+      appendChatMsg("system", "⚠ Premiere Pro のプロジェクトを開いてから再試行してください");
+    } else {
+      const imported = app.project.importFiles(
+        [xmlFile.nativePath], true, app.project.getInsertionBin(), false
+      );
+      if (imported) {
+        appendChatMsg("system", "✅ Premiere Pro にインポートしました");
+        // 暗黙的学習
+        sendImplicitFeedback(jobId).catch(() => {});
+      } else {
+        appendChatMsg("system", `⚠ インポート失敗 — ファイル保存先: ${xmlFile.nativePath}`);
+      }
+    }
+    hideChatStatus();
+
+  } catch (err) {
+    appendChatMsg("system", `❌ エラー: ${err.message}`);
+    setChatStatus(err.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "送信 → 即時インポート"; }
+  }
+}
+
+// ===========================================================================
 // Jobs Tab
 // ===========================================================================
 
@@ -111,6 +249,7 @@ async function loadJobs() {
   hide("jobs-loading");
   renderJobsList();
   populateAgentJobSelect();
+  populateChatJobSelect();
 }
 
 function renderJobsList() {
@@ -600,6 +739,42 @@ document.querySelectorAll(".quick-btn").forEach((btn) => {
     if (ta) ta.value = btn.dataset.prompt;
   });
 });
+
+$("btn-chat-send").addEventListener("click", sendChatMessage);
+
+// Chat: quick preset buttons
+document.querySelectorAll(".quick-btn[data-chat-prompt]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const ta = $("chat-input");
+    if (ta) { ta.value = btn.dataset.chatPrompt; ta.focus(); }
+  });
+});
+
+// Chat: Enter to send (Shift+Enter = newline)
+const chatInputEl = $("chat-input");
+if (chatInputEl) {
+  chatInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+}
+
+// Chat: when job selected, reset history
+const chatJobSel = $("chat-job-select");
+if (chatJobSel) {
+  chatJobSel.addEventListener("change", () => {
+    chatHistory = [];
+    const hist = $("chat-history");
+    if (hist) hist.innerHTML = "";
+    hideChatStatus();
+    const sel = chatJobSel.options[chatJobSel.selectedIndex];
+    if (sel && sel.value) {
+      appendChatMsg("system", `ℹ 「${sel.textContent.trim()}」を選択 — 編集指示を入力してください`);
+    }
+  });
+}
 
 $("btn-agent-send").addEventListener("click", startAgentEdit);
 

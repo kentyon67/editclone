@@ -513,6 +513,55 @@ def plugin_team_edit(
     }
 
 
+@router.post("/jobs/{job_id}/rich-premiere-xml")
+def plugin_rich_premiere_xml(
+    job_id: str,
+    body: RichFcpxmlRequest,
+    user: dict = Depends(require_user),
+):
+    """
+    操作リストを受け取りリッチ Premiere XML を生成して返す。
+    Premiere UXP チャット編集で即時インポートするために使う。
+    /rich-fcpxml の Premiere 版。
+    """
+    job = get_job(job_id)
+    if not job or job.user_id != user["id"]:
+        raise HTTPException(404, "Job not found")
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    info = result.get("info") or {}
+    cuts = result.get("cuts") or []
+    transcript = result.get("transcript") or {}
+    segments_raw = transcript.get("segments", []) if isinstance(transcript, dict) else []
+
+    from app.services.premiere_xml import build_premiere_xml
+    from app.services.srt import remap_segments_for_cuts
+
+    total_dur = float(info.get("duration_seconds", 0))
+    fps = float(info.get("fps", 30))
+    width = int(info.get("width", 1920))
+    height = int(info.get("height", 1080))
+
+    remapped = remap_segments_for_cuts(segments_raw, cuts, total_dur)
+    xml_content = build_premiere_xml(
+        job.video_path,
+        cuts=cuts,
+        total_duration=total_dur,
+        fps=fps,
+        width=width,
+        height=height,
+        segments=remapped,
+        operations=body.operations,
+    )
+    return Response(
+        content=xml_content.encode("utf-8"),
+        media_type="text/xml; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{job_id}_rich.xml"'},
+    )
+
+
 @router.post("/jobs/{job_id}/rich-fcpxml")
 def plugin_rich_fcpxml(
     job_id: str,

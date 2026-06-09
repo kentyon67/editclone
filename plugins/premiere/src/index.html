@@ -61,6 +61,7 @@
       <!-- Tab Bar -->
       <div class="tab-bar">
         <button class="tab-btn active" data-tab="jobs">📁 ジョブ</button>
+        <button class="tab-btn" data-tab="chat">💬 チャット</button>
         <button class="tab-btn" data-tab="agent">🤖 AI編集</button>
         <button class="tab-btn" data-tab="styles">🎨 スタイル</button>
       </div>
@@ -76,6 +77,42 @@
           <a href="#" id="link-open-web" class="link-btn">Web で処理する →</a>
         </div>
         <div id="jobs-list" class="jobs-list hidden"></div>
+      </div>
+
+      <!-- ===== Tab: Chat (instant interactive editing) ===== -->
+      <div id="tab-chat" class="tab-content hidden">
+        <div class="agent-section">
+          <label class="field-label">対象ジョブ</label>
+          <select id="chat-job-select" class="select-input">
+            <option value="">-- 動画を選択 --</option>
+          </select>
+        </div>
+
+        <!-- Chat History -->
+        <div id="chat-history" class="chat-history"></div>
+
+        <!-- Quick Prompts -->
+        <div class="quick-prompts chat-quick-prompts">
+          <button class="quick-btn" data-chat-prompt="冒頭の挨拶・タイトルコールをカット">冒頭カット</button>
+          <button class="quick-btn" data-chat-prompt="えー、あの、まあ などのフィラーをカット">フィラー除去</button>
+          <button class="quick-btn" data-chat-prompt="テンポよく：沈黙・間延びを積極的にカット">テンポ強化</button>
+          <button class="quick-btn" data-chat-prompt="YouTube Shorts向け：1分以内・字幕付き">Shorts向け</button>
+        </div>
+
+        <!-- Input -->
+        <div class="chat-input-area">
+          <textarea
+            id="chat-input"
+            class="chat-input"
+            placeholder="例: フィラーをカットして字幕を追加して"
+            rows="2"
+          ></textarea>
+          <button id="btn-chat-send" class="btn btn-primary btn-block" style="margin-top:6px">
+            送信 → 即時インポート
+          </button>
+        </div>
+
+        <div id="chat-status" class="chat-status hidden"></div>
       </div>
 
       <!-- ===== Tab: Agent ===== -->

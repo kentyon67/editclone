@@ -1016,6 +1016,23 @@ def run_gui():
                 out_dir = Path.home() / videos_dir / "EditClone" / job_id
                 out_dir.mkdir(parents=True, exist_ok=True)
                 fcpxml_path = out_dir / "rich_edit.fcpxml"
+
+                # ソースクリップを media/ サブディレクトリにコピー → FCPXML メディアパスを解決
+                source_clip = _state.get("source_clip")
+                if source_clip:
+                    try:
+                        props = source_clip.GetClipProperty() or {}
+                        src_file = props.get("File Path", "")
+                        if src_file and Path(src_file).exists():
+                            media_dir = out_dir / "media"
+                            media_dir.mkdir(parents=True, exist_ok=True)
+                            import shutil
+                            dest = media_dir / Path(src_file).name
+                            if not dest.exists():
+                                shutil.copy2(src_file, dest)
+                    except Exception:
+                        pass
+
                 fcpxml_path.write_bytes(fcpxml_bytes)
 
                 # DaVinci に FCPXML をインポート
