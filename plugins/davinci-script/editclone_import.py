@@ -26,6 +26,7 @@ from pathlib import Path
 # ================================================================
 
 _CONFIG_PATH = Path.home() / ".editclone" / "config.json"
+_DEFAULT_API_URL = "https://editclone-production.up.railway.app"
 _API_URL = ""
 _API_TOKEN = ""
 
@@ -1270,12 +1271,13 @@ def run_gui():
 
     tk.Label(tab_settings, text="EditClone API URL:", bg=BG, fg=MUTED,
              font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(16, 2))
-    url_var = tk.StringVar(value=_API_URL)
+    url_var = tk.StringVar(value=_API_URL or _DEFAULT_API_URL)
     ttk.Entry(tab_settings, textvariable=url_var,
               font=("Helvetica", 10)).pack(fill="x", padx=12, pady=(0, 10))
 
-    tk.Label(tab_settings, text="API トークン (eck_...):", bg=BG, fg=MUTED,
-             font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(0, 2))
+    tk.Label(tab_settings,
+             text="API トークン (eck_...)  ※ Dashboard → Account → API Keys で取得",
+             bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(anchor="w", padx=12, pady=(0, 2))
     token_var = tk.StringVar(value=_API_TOKEN)
     ttk.Entry(tab_settings, textvariable=token_var, show="•",
               font=("Helvetica", 10)).pack(fill="x", padx=12, pady=(0, 10))
@@ -1397,10 +1399,11 @@ def main():
             root = tk.Tk()
             root.withdraw()
             url   = simpledialog.askstring("EditClone 設定",
-                                           "EditClone API URL:\n例: https://xxx.railway.app",
+                                           "EditClone API URL:",
+                                           initialvalue=_DEFAULT_API_URL,
                                            parent=root)
             token = simpledialog.askstring("EditClone 設定",
-                                           "API トークン (eck_...)",
+                                           "API トークン (eck_...)\nダッシュボード → Account → API Keys で取得",
                                            parent=root)
             root.destroy()
             if url and token:
