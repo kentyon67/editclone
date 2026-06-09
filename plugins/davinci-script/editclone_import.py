@@ -1,32 +1,24 @@
 #!/usr/bin/env python3
 """
-EditClone — DaVinci Resolve AI 編集エージェント
+EditClone — DaVinci Resolve AI 編集エージェント v4
 =================================================
-DaVinci Resolve の Scripts メニューから実行すると起動する
-マルチタブ GUI エージェントです。
+• 🎬 AI編集  — メディアプールからクリップを選択→アップロード→AI処理→タイムライン自動生成
+• 💬 チャット — プロンプトで継続的にインタラクティブ編集（カット・速度・音量・字幕・ズーム等）
+• 🎨 スタイル — Style Profile 管理・切り替え
+• ⚙️ 設定    — API URL / Token / 診断
 
-タブ機能:
-  ジョブ   — 完了済みジョブ一覧・インポート
-  AI編集   — 自然言語で再編集指示・自動インポート
-  スタイル — Style Profile 管理・切り替え
-  設定     — API URL / トークン
-
-インストール方法:
-  macOS:   ~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/
+インストール:
   Windows: %APPDATA%\\Blackmagic Design\\DaVinci Resolve\\Support\\Fusion\\Scripts\\Utility\\
-  Linux:   ~/.local/share/DaVinciResolve/Fusion/Scripts/Utility/
+  macOS:   ~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/
 """
 
 import json
 import os
-import shutil
 import sys
-import tempfile
 import threading
 import time
-import urllib.error
 import urllib.request
-import zipfile
+import uuid
 from pathlib import Path
 
 # ================================================================
@@ -38,11 +30,11 @@ _API_URL = ""
 _API_TOKEN = ""
 
 
-def _load_config() -> tuple[str, str]:
+def _load_config() -> tuple:
     if _CONFIG_PATH.exists():
         try:
-            data = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
-            return data.get("api_url", ""), data.get("api_token", "")
+            d = json.loads(_CONFIG_PATH.read_text(encoding="utf-8"))
+            return d.get("api_url", ""), d.get("api_token", "")
         except Exception:
             pass
     return "", ""
@@ -60,8 +52,7 @@ def _save_config(url: str, token: str) -> None:
 # API ヘルパー
 # ================================================================
 
-def _add_auth_header(req: urllib.request.Request) -> None:
-    """eck_ プレフィックスの API キーは X-Api-Key、それ以外は Bearer で送信。"""
+def _add_auth(req: urllib.request.Request) -> None:
     if not _API_TOKEN:
         return
     if _API_TOKEN.startswith("eck_"):
@@ -70,146 +61,419 @@ def _add_auth_header(req: urllib.request.Request) -> None:
         req.add_header("Authorization", f"Bearer {_API_TOKEN}")
 
 
-def api_request(method: str, endpoint: str, payload: dict | None = None, timeout: int = 30) -> dict:
-    url = f"{_API_URL}{endpoint}"
-    data = json.dumps(payload).encode("utf-8") if payload else None
-    req = urllib.request.Request(url, data=data, method=method)
-    _add_auth_header(req)
+def _api(method: str, endpoint: str, payload=None, timeout: int = 30) -> dict:
+    data = json.dumps(payload).encode() if payload else None
+    req = urllib.request.Request(f"{_API_URL}{endpoint}", data=data, method=method)
+    _add_auth(req)
     if data:
         req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read())
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
 
 
-def api_get(endpoint: str, timeout: int = 30) -> dict:
-    return api_request("GET", endpoint, timeout=timeout)
+def api_get(ep: str, timeout: int = 30) -> dict:
+    return _api("GET", ep, timeout=timeout)
 
 
-def api_post(endpoint: str, payload: dict | None = None, timeout: int = 30) -> dict:
-    return api_request("POST", endpoint, payload, timeout=timeout)
+def api_post(ep: str, payload=None, timeout: int = 30) -> dict:
+    return _api("POST", ep, payload, timeout=timeout)
 
 
-def download_bytes(url_path: str, timeout: int = 120) -> bytes:
-    url = f"{_API_URL}{url_path}"
-    req = urllib.request.Request(url)
-    _add_auth_header(req)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+def upload_video(file_path: str, on_progress=None) -> str:
+    boundary = f"----EC{uuid.uuid4().hex}"
+    filename = Path(file_path).name
+    if on_progress:
+        on_progress("ファイル読み込み中...")
+    with open(file_path, "rb") as f:
+        file_bytes = f.read()
+    size_mb = len(file_bytes) / 1024 / 1024
+    if on_progress:
+        on_progress(f"アップロード中... ({size_mb:.1f} MB)")
+    header = (
+        f"--{boundary}\r\nContent-Disposition: form-data; "
+        f'name="file"; filename="{filename}"\r\nContent-Type: application/octet-stream\r\n\r\n'
+    ).encode()
+    body = header + file_bytes + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request(f"{_API_URL}/videos/upload", data=body, method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    _add_auth(req)
+    with urllib.request.urlopen(req, timeout=600) as r:
+        return json.loads(r.read())["video_id"]
+
+
+def download_srt_file(job_id: str) -> str:
+    """SRT をローカルに保存してパスを返す。"""
+    videos_dir = "Videos" if sys.platform == "win32" else "Movies"
+    out_dir = Path.home() / videos_dir / "EditClone" / job_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    srt_path = out_dir / "subtitle.srt"
+    req = urllib.request.Request(f"{_API_URL}/plugin/jobs/{job_id}/srt")
+    _add_auth(req)
+    with urllib.request.urlopen(req, timeout=30) as r:
+        srt_path.write_bytes(r.read())
+    return str(srt_path)
 
 
 # ================================================================
-# DaVinci Resolve API
+# DaVinci Resolve 接続
 # ================================================================
+
+_RESOLVE_ERRORS: list = []
+
 
 def get_resolve():
-    try:
-        import DaVinciResolveScript as dvr_script
-        return dvr_script.scriptapp("Resolve")
-    except ImportError:
-        pass
+    _RESOLVE_ERRORS.clear()
+    g = globals()
+    for name, fn in [("app", lambda o: o.GetResolve()), ("fu", lambda o: o.GetResolve())]:
+        obj = g.get(name)
+        if obj is not None:
+            try:
+                r = fn(obj)
+                if r:
+                    return r
+                _RESOLVE_ERRORS.append(f"{name}.GetResolve(): None")
+            except Exception as e:
+                _RESOLVE_ERRORS.append(f"{name}: {e}")
+        else:
+            _RESOLVE_ERRORS.append(f"{name}: なし")
+
+    _bmd = g.get("bmd")
+    if _bmd:
+        for app_name in ("Resolve", "Fusion"):
+            try:
+                obj = _bmd.scriptapp(app_name)
+                if obj:
+                    r = obj if app_name == "Resolve" else obj.GetResolve()
+                    if r:
+                        return r
+                    _RESOLVE_ERRORS.append(f"bmd→{app_name}: None")
+            except Exception as e:
+                _RESOLVE_ERRORS.append(f"bmd→{app_name}: {e}")
+    else:
+        _RESOLVE_ERRORS.append("bmd: なし")
+
     for path in [
+        r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting\Modules",
+        r"C:\Program Files\Blackmagic Design\DaVinci Resolve",
         "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/",
-        r"C:\Program Files\Blackmagic Design\DaVinci Resolve\\",
-        "/opt/resolve/libs/Fusion/",
+        "/opt/resolve/Developer/Scripting/Modules/",
     ]:
         if os.path.exists(path) and path not in sys.path:
             sys.path.insert(0, path)
     try:
-        import DaVinciResolveScript as dvr_script
-        return dvr_script.scriptapp("Resolve")
-    except ImportError:
-        return None
-
-
-def import_to_resolve(resolve, files: dict) -> str:
-    project_manager = resolve.GetProjectManager()
-    project = project_manager.GetCurrentProject()
-    if not project:
-        return "No active project"
-
-    media_pool = project.GetMediaPool()
-    root_bin = media_pool.GetRootFolder()
-
-    editclone_bin = None
-    for subfolder in root_bin.GetSubFolderList():
-        if subfolder.GetName() == "EditClone":
-            editclone_bin = subfolder
-            break
-    if editclone_bin is None:
-        editclone_bin = media_pool.AddSubFolder(root_bin, "EditClone")
-
-    media_pool.SetCurrentFolder(editclone_bin)
-
-    if files.get("media"):
-        clips = media_pool.ImportMedia(files["media"])
-        if clips:
-            print(f"Imported {len(clips)} media file(s)")
-
-    if files.get("srt"):
-        try:
-            media_pool.ImportMedia([files["srt"]])
-        except Exception:
-            pass
-
-    if files.get("fcpxml"):
-        timelines = media_pool.ImportTimelineFromFile(files["fcpxml"])
-        if timelines:
-            project.SetCurrentTimeline(timelines[0])
-            return "ok"
-        if files.get("media"):
-            tl = media_pool.CreateTimelineFromClips("EditClone", [])
-            return "ok_no_xml" if tl else "timeline_import_failed"
-        return "timeline_import_failed"
-
-    return "ok_media_only"
-
-
-def _download_and_extract(job_id: str) -> dict:
-    """ZIP をダウンロードして永続パスに展開し、ファイルパス dict を返す。"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir_path = Path(tmpdir)
-        zip_data = download_bytes(f"/jobs/{job_id}/download")
-        zip_path = tmpdir_path / f"{job_id}.zip"
-        zip_path.write_bytes(zip_data)
-
-        extract_dir = tmpdir_path / "ex"
-        extract_dir.mkdir()
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(extract_dir)
-
-        files: dict = {"fcpxml": None, "media": [], "srt": None}
-        for f in extract_dir.rglob("*"):
-            if f.suffix == ".fcpxml":
-                files["fcpxml"] = str(f)
-            elif f.suffix in {".mp4", ".mov", ".m4v", ".mxf"}:
-                files["media"].append(str(f))
-            elif f.suffix == ".srt":
-                files["srt"] = str(f)
-
-        # 永続ディレクトリにコピー
-        persist_dir = Path.home() / "Movies" / "EditClone" / job_id
-        persist_dir.mkdir(parents=True, exist_ok=True)
-
-        if files["fcpxml"]:
-            dest = persist_dir / Path(files["fcpxml"]).name
-            shutil.copy2(files["fcpxml"], dest)
-            files["fcpxml"] = str(dest)
-        new_media = []
-        for m in files["media"]:
-            dest = persist_dir / Path(m).name
-            shutil.copy2(m, dest)
-            new_media.append(str(dest))
-        files["media"] = new_media
-        if files["srt"]:
-            dest = persist_dir / Path(files["srt"]).name
-            shutil.copy2(files["srt"], dest)
-            files["srt"] = str(dest)
-
-        return files
+        import DaVinciResolveScript as dvr  # type: ignore
+        r = dvr.scriptapp("Resolve")
+        if r:
+            return r
+        _RESOLVE_ERRORS.append("DaVinciResolveScript: None")
+    except Exception as e:
+        _RESOLVE_ERRORS.append(f"DaVinciResolveScript: {e}")
+    return None
 
 
 # ================================================================
-# GUI — tkinter + ttk.Notebook 多タブエージェント
+# DaVinci 操作ヘルパー
+# ================================================================
+
+def get_media_pool_clips(resolve) -> list:
+    try:
+        project = resolve.GetProjectManager().GetCurrentProject()
+        if not project:
+            return []
+        root = project.GetMediaPool().GetRootFolder()
+        clips = []
+
+        def collect(folder):
+            for c in (folder.GetClipList() or []):
+                clips.append(c)
+            for sub in (folder.GetSubFolderList() or []):
+                collect(sub)
+
+        collect(root)
+        return clips
+    except Exception:
+        return []
+
+
+def apply_cuts_to_timeline(resolve, media_clip, cuts: list, fps: float, name: str):
+    project = resolve.GetProjectManager().GetCurrentProject()
+    if not project:
+        return None, "アクティブなプロジェクトがありません"
+    media_pool = project.GetMediaPool()
+    infos = []
+    for seg in cuts:
+        sf = int(float(seg.get("start", 0)) * fps)
+        ef = int(float(seg.get("end",   0)) * fps)
+        if ef > sf:
+            infos.append({"mediaPoolItem": media_clip, "startFrame": sf,
+                          "endFrame": ef, "mediaType": 1})
+    if not infos:
+        return None, "有効なセグメントがありません"
+    tl = media_pool.CreateTimelineFromClips(name, infos)
+    if not tl:
+        return None, "CreateTimelineFromClips 失敗"
+    project.SetCurrentTimeline(tl)
+    return tl, "ok"
+
+
+def get_source_clip_from_current_timeline(resolve):
+    """現在のタイムラインの最初のビデオクリップのメディアプールアイテムを返す。"""
+    try:
+        project = resolve.GetProjectManager().GetCurrentProject()
+        tl = project.GetCurrentTimeline()
+        if not tl:
+            return None
+        items = tl.GetItemsInTrack("video", 1) or {}
+        first = next(iter(items.values())) if items else None
+        return first.GetMediaPoolItem() if first else None
+    except Exception:
+        return None
+
+
+# ================================================================
+# 編集操作の適用（全タイプ対応）
+# ================================================================
+
+def _get_current_timeline(resolve):
+    try:
+        return resolve.GetProjectManager().GetCurrentProject().GetCurrentTimeline()
+    except Exception:
+        return None
+
+
+def _get_video_items(tl):
+    items = {}
+    try:
+        cnt = tl.GetTrackCount("video")
+        for i in range(1, cnt + 1):
+            items.update(tl.GetItemsInTrack("video", i) or {})
+    except Exception:
+        pass
+    return items
+
+
+def _get_audio_items(tl):
+    items = {}
+    try:
+        cnt = tl.GetTrackCount("audio")
+        for i in range(1, cnt + 1):
+            items.update(tl.GetItemsInTrack("audio", i) or {})
+    except Exception:
+        pass
+    return items
+
+
+def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tuple:
+    """
+    1 つの操作を DaVinci に適用。
+    返り値: (icon, message)  icon = "✓"|"⚠"|"✗"
+    """
+    op_type = op.get("type", "")
+    desc    = op.get("description", op_type)
+
+    # ── カット構成変更 ──────────────────────────────────────
+    if op_type == "cut":
+        segs = op.get("keep_segments") or []
+        if not segs:
+            return "⚠", "keep_segments が空です"
+        fps  = float(job_ctx.get("fps", 30))
+        clip = source_clip or get_source_clip_from_current_timeline(resolve)
+        if not clip:
+            return "✗", "ソースクリップが見つかりません（メディアプールにクリップが必要）"
+        tl_name = f"EditClone_{int(time.time()) % 10000}"
+        _, result = apply_cuts_to_timeline(resolve, clip, segs, fps, tl_name)
+        if result == "ok":
+            return "✓", f"タイムライン作成: {len(segs)} セグメント"
+        return "✗", result
+
+    # ── トリム（冒頭/末尾削除） ────────────────────────────
+    if op_type == "trim":
+        start_s = float(op.get("start_seconds", 0))
+        end_s   = float(op.get("end_seconds",   0))
+        duration = float(job_ctx.get("duration", 0))
+        cuts = job_ctx.get("cuts") or []
+        if not cuts and duration > 0:
+            cuts = [{"start": 0.0, "end": duration}]
+        new_segs = []
+        for seg in cuts:
+            s = max(seg["start"], start_s)
+            e = min(seg["end"],   duration - end_s) if end_s > 0 else seg["end"]
+            if e > s:
+                new_segs.append({"start": s, "end": e})
+        if not new_segs:
+            return "⚠", "トリム後にセグメントが残りません"
+        return apply_single_operation(resolve, {"type": "cut", "keep_segments": new_segs}, job_ctx, source_clip)
+
+    # ── 再生速度 ───────────────────────────────────────────
+    if op_type == "speed":
+        speed_pct = float(op.get("speed_percent", 100))
+        speed_val = speed_pct / 100.0
+        tl = _get_current_timeline(resolve)
+        if not tl:
+            return "✗", "タイムラインがありません"
+        applied = 0
+        for item in _get_video_items(tl).values():
+            try:
+                item.SetProperty("Speed", speed_val)
+                applied += 1
+            except Exception:
+                pass
+        if applied:
+            return "✓", f"速度を {speed_pct:.0f}% に設定 ({applied} クリップ)"
+        return "⚠", f"速度変更 API 未対応（DaVinci で手動: クリップ右クリック → Change Speed → {speed_pct:.0f}%）"
+
+    # ── 音量調整 ───────────────────────────────────────────
+    if op_type == "volume":
+        vol_db = float(op.get("volume_db", 0))
+        tl = _get_current_timeline(resolve)
+        if not tl:
+            return "✗", "タイムラインがありません"
+        applied = 0
+        for item in _get_audio_items(tl).values():
+            for method in ["SetVolume", "SetProperty"]:
+                try:
+                    if method == "SetVolume":
+                        item.SetVolume(vol_db)
+                    else:
+                        item.SetProperty("Volume", vol_db)
+                    applied += 1
+                    break
+                except Exception:
+                    pass
+        if applied:
+            return "✓", f"音量 {vol_db:+.0f}dB を設定 ({applied} クリップ)"
+        return "⚠", f"音量変更 API 未対応（DaVinci Fairlight で手動: {vol_db:+.0f}dB）"
+
+    # ── ズーム ─────────────────────────────────────────────
+    if op_type == "zoom":
+        zoom = float(op.get("zoom_level", 1.0))
+        tl = _get_current_timeline(resolve)
+        if not tl:
+            return "✗", "タイムラインがありません"
+        applied = 0
+        for item in _get_video_items(tl).values():
+            try:
+                item.SetProperty("ZoomX", zoom)
+                item.SetProperty("ZoomY", zoom)
+                applied += 1
+            except Exception:
+                pass
+        if applied:
+            return "✓", f"ズーム {zoom:.2f}x を設定 ({applied} クリップ)"
+        return "⚠", f"ズーム API 未対応（DaVinci Inspector で手動: {zoom:.2f}x）"
+
+    # ── 字幕追加 ───────────────────────────────────────────
+    if op_type == "subtitle":
+        job_id = job_ctx.get("job_id", "")
+        if not job_id:
+            return "✗", "ジョブIDがありません"
+        if not job_ctx.get("srt_available"):
+            return "⚠", "字幕データが生成されていません（Web でジョブを再処理してください）"
+        try:
+            srt_path = download_srt_file(job_id)
+            project = resolve.GetProjectManager().GetCurrentProject()
+            if not project:
+                return "✗", "プロジェクトがありません"
+            media_pool = project.GetMediaPool()
+            clips = media_pool.ImportMedia([srt_path])
+            if clips:
+                tl = _get_current_timeline(resolve)
+                # DaVinci 18.5+ の場合はサブタイトルトラックに追加試行
+                if tl:
+                    try:
+                        tl.InsertSubtitleToTimeline({"mediaPoolItem": clips[0],
+                                                     "trackIndex": 1, "recordFrame": 0})
+                        return "✓", f"字幕をタイムラインに追加しました"
+                    except Exception:
+                        pass
+                return "✓", f"SRT をメディアプールにインポートしました: {Path(srt_path).name}\n" \
+                             "Media Pool から字幕トラックにドラッグしてください"
+            return "⚠", "SRT のインポートに失敗しました"
+        except Exception as e:
+            return "✗", f"字幕取得エラー: {e}"
+
+    # ── カラー調整 ─────────────────────────────────────────
+    if op_type == "color":
+        preset = op.get("preset", "")
+        tl = _get_current_timeline(resolve)
+        if tl:
+            # フラグで色ラベルを付ける（カラーページへの誘導）
+            color_map = {
+                "warm": "Orange", "cool": "Blue", "cinematic": "Purple",
+                "bright": "Yellow", "dark": "Navy", "bw": "Beige",
+            }
+            flag = color_map.get(preset, "Pink")
+            try:
+                for item in _get_video_items(tl).values():
+                    item.AddFlag(flag)
+            except Exception:
+                pass
+        instructions = {
+            "warm":      "Color Wheels: Lift/Gamma/Gain を橙寄りに、Saturation +10",
+            "cool":      "Color Wheels: Lift/Gamma/Gain を青寄りに、Saturation -5",
+            "cinematic": "Curves: S字コントラスト、Saturation -15、Lift +5",
+            "bright":    "Gamma +0.1、Lift +0.05、Gain +0.05",
+            "dark":      "Gamma -0.1、Lift -0.05",
+            "bw":        "Saturation を 0 に設定",
+        }
+        msg = instructions.get(preset, f"preset={preset}")
+        return "⚠", f"カラー({preset}): DaVinci Color ページで手動調整してください\n→ {msg}\n（クリップにフラグを付けました）"
+
+    # ── BGM ───────────────────────────────────────────────
+    if op_type == "bgm":
+        mood = op.get("mood", "")
+        return "⚠", (
+            f"BGM({mood}): 著作権フリー音楽を検索して追加してください\n"
+            "推奨: YouTube Audio Library / Pixabay Music\n"
+            "Fairlight ページのオーディオトラックにドラッグ → 音量 -20〜-15dB"
+        )
+
+    # ── マーカー追加 ───────────────────────────────────────
+    if op_type == "marker":
+        moments = op.get("moments") or []
+        if not moments:
+            return "⚠", "マーカー情報がありません"
+        tl = _get_current_timeline(resolve)
+        if not tl:
+            return "✗", "タイムラインがありません"
+        fps = float(job_ctx.get("fps", 30))
+        added = 0
+        colors = ["Yellow", "Green", "Cyan", "Blue", "Purple", "Red"]
+        for i, m in enumerate(moments):
+            t     = float(m.get("time", 0))
+            label = str(m.get("label", f"Point {i+1}"))
+            frame = int(t * fps)
+            color = colors[i % len(colors)]
+            try:
+                tl.AddMarker(frame, color, label, "", 1)
+                added += 1
+            except Exception:
+                pass
+        if added:
+            return "✓", f"マーカーを {added} 件追加しました"
+        return "⚠", "マーカー追加 API 未対応"
+
+    # ── 不明な操作 ─────────────────────────────────────────
+    if op_type == "error":
+        return "✗", desc
+    return "⚠", f"未対応の操作: {op_type} — {desc}"
+
+
+def apply_all_operations(resolve, operations: list, job_ctx: dict,
+                         source_clip, append_cb) -> None:
+    """全操作を順に適用し、結果を append_cb でチャットに追記する。"""
+    for op in operations:
+        op_type = op.get("type", "?")
+        try:
+            icon, msg = apply_single_operation(resolve, op, job_ctx, source_clip)
+        except Exception as e:
+            icon, msg = "✗", str(e)
+        append_cb("system", f"{icon} [{op_type}] {msg}")
+        time.sleep(0.1)
+
+
+# ================================================================
+# GUI
 # ================================================================
 
 def run_gui():
@@ -217,593 +481,732 @@ def run_gui():
 
     try:
         import tkinter as tk
-        from tkinter import ttk, messagebox, scrolledtext
+        from tkinter import ttk, messagebox
     except ImportError:
-        print("[EditClone] tkinter が利用できません。コンソールモードを使用してください。")
-        run_console()
+        print("[EditClone] tkinter が利用できません")
         return
 
     resolve = get_resolve()
 
-    # ---------- カラー定義 ----------
-    BG = "#0f0f14"
-    BG2 = "#1a1a24"
-    BG3 = "#22222e"
+    # テーマ色
+    BG     = "#0f0f14"
+    BG2    = "#1a1a24"
+    BG3    = "#22222e"
     BORDER = "#2e2e3e"
     PURPLE = "#a855f7"
-    TEXT = "#e8e8f0"
-    MUTED = "#8888a8"
-    GREEN = "#22c55e"
-    RED = "#ef4444"
+    TEXT   = "#e8e8f0"
+    MUTED  = "#8888a8"
+    GREEN  = "#22c55e"
+    RED    = "#ef4444"
+    YELLOW = "#eab308"
 
     root = tk.Tk()
     root.title("EditClone Agent — DaVinci Resolve")
     root.configure(bg=BG)
-    root.geometry("440x620")
+    root.geometry("500x720")
     root.resizable(True, True)
 
-    style = ttk.Style(root)
-    style.theme_use("clam")
-    style.configure(".", background=BG, foreground=TEXT, font=("Helvetica", 11))
-    style.configure("TNotebook", background=BG2, borderwidth=0)
-    style.configure("TNotebook.Tab", background=BG3, foreground=MUTED,
-                    padding=[12, 6], borderwidth=0)
-    style.map("TNotebook.Tab", background=[("selected", BG)], foreground=[("selected", PURPLE)])
-    style.configure("TFrame", background=BG)
-    style.configure("TLabel", background=BG, foreground=TEXT)
-    style.configure("TEntry", fieldbackground=BG2, foreground=TEXT, borderwidth=1)
-    style.configure("TButton", background=BG3, foreground=TEXT, borderwidth=0, padding=[8, 4])
-    style.map("TButton", background=[("active", BG2)], foreground=[("active", PURPLE)])
-    style.configure("Primary.TButton", background=PURPLE, foreground="#ffffff")
-    style.map("Primary.TButton", background=[("active", "#7c3aed")])
-    style.configure("Import.TButton", background="#2563eb", foreground="#ffffff")
-    style.map("Import.TButton", background=[("active", "#1d4ed8")])
-    style.configure("TProgressbar", troughcolor=BG3, background=PURPLE, borderwidth=0, thickness=6)
-    style.configure("Treeview", background=BG2, foreground=TEXT, fieldbackground=BG2,
-                    rowheight=28, borderwidth=0)
-    style.map("Treeview", background=[("selected", BG3)], foreground=[("selected", PURPLE)])
-    style.configure("Treeview.Heading", background=BG3, foreground=MUTED, borderwidth=0)
+    sty = ttk.Style(root)
+    sty.theme_use("clam")
+    sty.configure(".", background=BG, foreground=TEXT, font=("Helvetica", 11))
+    sty.configure("TNotebook", background=BG2, borderwidth=0)
+    sty.configure("TNotebook.Tab", background=BG3, foreground=MUTED, padding=[12, 6], borderwidth=0)
+    sty.map("TNotebook.Tab", background=[("selected", BG)], foreground=[("selected", PURPLE)])
+    sty.configure("TFrame", background=BG)
+    sty.configure("TLabel", background=BG, foreground=TEXT)
+    sty.configure("TEntry", fieldbackground=BG2, foreground=TEXT, borderwidth=1)
+    sty.configure("TCombobox", fieldbackground=BG2, foreground=TEXT)
+    sty.configure("TButton", background=BG3, foreground=TEXT, borderwidth=0, padding=[8, 4])
+    sty.map("TButton", background=[("active", BG2)], foreground=[("active", PURPLE)])
+    sty.configure("P.TButton", background=PURPLE, foreground="#fff")
+    sty.map("P.TButton", background=[("active", "#7c3aed")])
+    sty.configure("B.TButton", background="#2563eb", foreground="#fff")
+    sty.map("B.TButton", background=[("active", "#1d4ed8")])
+    sty.configure("TProgressbar", troughcolor=BG3, background=PURPLE, borderwidth=0, thickness=5)
+    sty.configure("Treeview", background=BG2, foreground=TEXT, fieldbackground=BG2,
+                  rowheight=26, borderwidth=0)
+    sty.map("Treeview", background=[("selected", BG3)], foreground=[("selected", PURPLE)])
+    sty.configure("Treeview.Heading", background=BG3, foreground=MUTED, borderwidth=0)
 
-    # ---------- ヘッダー ----------
+    # ── ヘッダー ──────────────────────────────────────────
     header = tk.Frame(root, bg=BG2, height=44)
     header.pack(fill="x", side="top")
     header.pack_propagate(False)
     tk.Label(header, text="✦ EditClone Agent", bg=BG2, fg=PURPLE,
              font=("Helvetica", 13, "bold")).pack(side="left", padx=14, pady=10)
-    resolve_label = tk.Label(
+    conn_lbl = tk.Label(
         header,
         text="✓ DaVinci 接続済み" if resolve else "✗ DaVinci 未接続",
-        bg=BG2,
-        fg=GREEN if resolve else RED,
-        font=("Helvetica", 9),
+        bg=BG2, fg=GREEN if resolve else RED, font=("Helvetica", 9),
     )
-    resolve_label.pack(side="right", padx=14)
+    conn_lbl.pack(side="right", padx=14)
 
-    # ---------- ノートブック ----------
     nb = ttk.Notebook(root)
-    nb.pack(fill="both", expand=True, padx=0, pady=0)
+    nb.pack(fill="both", expand=True)
 
-    # ==============================
-    # タブ共通ヘルパー
-    # ==============================
+    # 共有状態
+    _state: dict = {
+        "job_id": "",
+        "fps": 30.0,
+        "duration": 0.0,
+        "cuts": [],
+        "srt_available": False,
+        "source_clip": None,   # DaVinci media pool item
+    }
+    styles_data: list = []
+    jobs_data: list = []
+    _chat_history: list = []  # [{"role":"user"|"assistant","content":str}]
 
-    jobs_data: list[dict] = []
-    styles_data: list[dict] = []
+    def st_set(key, val):
+        _state[key] = val
 
-    def status_bar(parent, text="", fg=MUTED) -> tk.Label:
-        lbl = tk.Label(parent, text=text, bg=BG, fg=fg, font=("Helvetica", 9),
-                       wraplength=400, justify="left")
-        lbl.pack(fill="x", padx=10, pady=(0, 6))
-        return lbl
+    # ================================================================
+    # タブ1: 🎬 AI編集
+    # ================================================================
+    tab_edit = ttk.Frame(nb)
+    nb.add(tab_edit, text="🎬 AI編集")
 
-    def set_status(lbl: tk.Label, text: str, fg: str = MUTED):
-        lbl.configure(text=text, fg=fg)
-        lbl.update_idletasks()
+    _clips: list = []
 
-    # ==============================
-    # ジョブ タブ
-    # ==============================
+    def _mk_label(parent, text, pady=(0, 2)):
+        tk.Label(parent, text=text, bg=BG, fg=MUTED,
+                 font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=pady)
 
-    tab_jobs = ttk.Frame(nb)
-    nb.add(tab_jobs, text="📁 ジョブ")
+    _mk_label(tab_edit, "① DaVinci のクリップを選択:", pady=(12, 2))
+    clip_row = tk.Frame(tab_edit, bg=BG)
+    clip_row.pack(fill="x", padx=12, pady=(0, 2))
+    clip_var = tk.StringVar()
+    clip_cb  = ttk.Combobox(clip_row, textvariable=clip_var, state="readonly",
+                             font=("Helvetica", 10))
+    clip_cb.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-    jobs_status = status_bar(tab_jobs, "読み込み中...")
+    clip_info_lbl = tk.Label(tab_edit, text="", bg=BG, fg=MUTED,
+                             font=("Helvetica", 8), wraplength=460)
+    clip_info_lbl.pack(anchor="w", padx=12, pady=(0, 4))
 
-    jobs_tree_frame = tk.Frame(tab_jobs, bg=BG)
-    jobs_tree_frame.pack(fill="both", expand=True, padx=10, pady=4)
-
-    jobs_cols = ("name", "date", "cuts")
-    jobs_tree = ttk.Treeview(jobs_tree_frame, columns=jobs_cols, show="headings",
-                              height=10, selectmode="browse")
-    jobs_tree.heading("name", text="動画名")
-    jobs_tree.heading("date", text="日付")
-    jobs_tree.heading("cuts", text="カット")
-    jobs_tree.column("name", width=200, stretch=True)
-    jobs_tree.column("date", width=90, stretch=False)
-    jobs_tree.column("cuts", width=50, stretch=False)
-    jobs_tree.pack(fill="both", expand=True)
-
-    jobs_scroll = ttk.Scrollbar(jobs_tree_frame, orient="vertical", command=jobs_tree.yview)
-    jobs_scroll.pack(side="right", fill="y")
-    jobs_tree.configure(yscrollcommand=jobs_scroll.set)
-
-    # 選択ジョブ詳細パネル
-    detail_frame = tk.LabelFrame(tab_jobs, text="選択中のジョブ", bg=BG, fg=MUTED,
-                                 font=("Helvetica", 9), pady=4)
-    detail_frame.pack(fill="x", padx=10, pady=4)
-    detail_label = tk.Label(detail_frame, text="ジョブをクリックして選択", bg=BG, fg=MUTED,
-                            font=("Helvetica", 10))
-    detail_label.pack(padx=8, pady=2)
-
-    btns_frame = tk.Frame(tab_jobs, bg=BG)
-    btns_frame.pack(fill="x", padx=10, pady=(0, 8))
-
-    def _import_selected():
-        sel = jobs_tree.selection()
-        if not sel:
-            messagebox.showwarning("選択なし", "インポートするジョブを選択してください", parent=root)
-            return
-        job_id = sel[0]  # iid = job_id
-        _do_import(job_id)
-
-    def _redit_selected():
-        sel = jobs_tree.selection()
-        if not sel:
-            messagebox.showwarning("選択なし", "再編集するジョブを選択してください", parent=root)
-            return
-        job_id = sel[0]  # iid = job_id
-        nb.select(tab_agent)
-        agent_job_var.set(job_id)
-        _refresh_agent_combo()
-
-    def _do_import(job_id: str, after_edit: bool = False):
-        set_status(jobs_status, "ダウンロード中...", MUTED)
-        btn_import.configure(state="disabled")
-
-        def _run():
+    def _reload_clips():
+        nonlocal _clips
+        _clips = get_media_pool_clips(resolve) if resolve else []
+        names = []
+        for c in _clips:
             try:
-                files = _download_and_extract(job_id)
-                if not resolve:
-                    set_status(jobs_status, "DaVinci Resolve に接続できません", RED)
-                    return
-                result = import_to_resolve(resolve, files)
-                if result.startswith("ok"):
-                    msg = f"✓ インポート完了！" + (" (AI再編集)" if after_edit else "")
-                    set_status(jobs_status, msg, GREEN)
-                else:
-                    set_status(jobs_status, f"インポート結果: {result}", RED)
-            except Exception as e:
-                set_status(jobs_status, f"エラー: {e}", RED)
-            finally:
-                btn_import.configure(state="normal")
+                p = c.GetClipProperty() or {}
+                nm = p.get("Clip Name") or p.get("File Name") or "Unknown"
+                du = p.get("Duration", "")
+                names.append(f"{nm}  [{du}]" if du else nm)
+            except Exception:
+                names.append("(取得失敗)")
+        clip_cb["values"] = names or (["クリップなし"] if resolve else ["DaVinci 未接続"])
+        if names:
+            clip_cb.current(0)
+            _show_clip_info()
 
-        threading.Thread(target=_run, daemon=True).start()
-
-    btn_import = ttk.Button(btns_frame, text="📥 DaVinci にインポート",
-                            style="Import.TButton", command=_import_selected)
-    btn_import.pack(side="left", padx=(0, 6))
-
-    ttk.Button(btns_frame, text="🤖 AI再編集",
-               command=_redit_selected).pack(side="left", padx=(0, 6))
-
-    ttk.Button(btns_frame, text="↻ 更新",
-               command=lambda: threading.Thread(target=_load_jobs, daemon=True).start()
-               ).pack(side="right")
-
-    def _load_jobs():
-        set_status(jobs_status, "読み込み中...", MUTED)
-        try:
-            resp = api_get("/plugin/jobs")
-            jobs_data.clear()
-            jobs_data.extend(resp.get("jobs", []))
-            _render_jobs()
-            set_status(jobs_status, f"{len(jobs_data)} 件のジョブ", MUTED)
-        except Exception as e:
-            set_status(jobs_status, f"取得エラー: {e}", RED)
-
-    def _render_jobs():
-        jobs_tree.delete(*jobs_tree.get_children())
-        for job in jobs_data:
-            date_str = (job.get("created_at") or "")[:10]
-            cut_str = str(job.get("cut_count", ""))
-            jobs_tree.insert("", "end", iid=job["job_id"],
-                             values=(job["video_name"], date_str, cut_str))
-
-    def _on_job_select(event):
-        sel = jobs_tree.selection()
-        if not sel:
+    def _show_clip_info(*_):
+        idx = clip_cb.current()
+        if idx < 0 or idx >= len(_clips):
+            clip_info_lbl.configure(text="")
             return
-        job_id = sel[0]  # iid = job_id
-        job = next((j for j in jobs_data if j["job_id"] == job_id), None)
-        if job:
-            detail_label.configure(
-                text=f"{job['video_name']}\n"
-                     f"カット数: {job.get('cut_count', '?')} 件"
-                     + (f"\n指示: 「{job['prompt'][:40]}」" if job.get("prompt") else ""),
-                fg=TEXT,
+        try:
+            p    = _clips[idx].GetClipProperty() or {}
+            path = p.get("File Path", "パス不明")
+            fps  = p.get("FPS", "?")
+            res  = p.get("Resolution", "?")
+            sz   = p.get("File Size", "")
+            clip_info_lbl.configure(
+                text=f"📂 {Path(path).name}  |  {fps}fps  |  {res}" +
+                     (f"  |  {sz}" if sz else ""),
+                fg=MUTED,
             )
+        except Exception:
+            clip_info_lbl.configure(text="")
 
-    jobs_tree.bind("<<TreeviewSelect>>", _on_job_select)
+    clip_cb.bind("<<ComboboxSelected>>", _show_clip_info)
+    ttk.Button(clip_row, text="↻", width=3, command=_reload_clips).pack(side="left")
 
-    # ==============================
-    # AI編集 タブ
-    # ==============================
+    ttk.Separator(tab_edit).pack(fill="x", padx=12, pady=8)
+    _mk_label(tab_edit, "② 編集指示:")
 
-    tab_agent = ttk.Frame(nb)
-    nb.add(tab_agent, text="🤖 AI編集")
-
-    tk.Label(tab_agent, text="対象ジョブ:", bg=BG, fg=MUTED,
-             font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(12, 2))
-
-    agent_job_var = tk.StringVar(value="")
-    agent_combo = ttk.Combobox(tab_agent, textvariable=agent_job_var, state="readonly",
-                                font=("Helvetica", 10))
-    agent_combo.pack(fill="x", padx=12, pady=(0, 8))
-
-    def _refresh_agent_combo():
-        names = [f"{j['video_name']} ({(j.get('created_at') or '')[:10]})"
-                 for j in jobs_data]
-        agent_combo["values"] = names
-        ids = [j["job_id"] for j in jobs_data]
-        agent_combo._ids = ids
-
-        # agent_job_var が job_id なら対応 index を選択
-        cur = agent_job_var.get()
-        if cur and cur in ids:
-            agent_combo.current(ids.index(cur))
-        elif names:
-            agent_combo.current(0)
-
-    tk.Label(tab_agent, text="編集指示:", bg=BG, fg=MUTED,
-             font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(0, 2))
-
-    agent_text = tk.Text(tab_agent, height=4, bg=BG2, fg=TEXT, insertbackground=TEXT,
+    PLACEHOLDER = "例: フィラー・無音を除去してテンポよく編集、字幕も追加"
+    prompt_box = tk.Text(tab_edit, height=4, bg=BG2, fg=MUTED, insertbackground=TEXT,
                          relief="flat", font=("Helvetica", 11), wrap="word",
                          borderwidth=1, highlightthickness=1,
                          highlightbackground=BORDER, highlightcolor=PURPLE)
-    agent_text.pack(fill="x", padx=12, pady=(0, 6))
-    agent_text.insert("1.0", "例: 冒頭の挨拶をカットして、フィラーワードも除去してください")
-    agent_text.configure(fg=MUTED)
+    prompt_box.pack(fill="x", padx=12, pady=(0, 6))
+    prompt_box.insert("1.0", PLACEHOLDER)
 
-    def _on_text_focus_in(e):
-        if agent_text.cget("fg") == MUTED:
-            agent_text.delete("1.0", "end")
-            agent_text.configure(fg=TEXT)
+    def _pin(*_):
+        if prompt_box.cget("fg") == MUTED:
+            prompt_box.delete("1.0", "end")
+            prompt_box.configure(fg=TEXT)
 
-    def _on_text_focus_out(e):
-        if not agent_text.get("1.0", "end").strip():
-            agent_text.insert("1.0", "例: 冒頭の挨拶をカットして、フィラーワードも除去してください")
-            agent_text.configure(fg=MUTED)
+    def _pout(*_):
+        if not prompt_box.get("1.0", "end").strip():
+            prompt_box.insert("1.0", PLACEHOLDER)
+            prompt_box.configure(fg=MUTED)
 
-    agent_text.bind("<FocusIn>", _on_text_focus_in)
-    agent_text.bind("<FocusOut>", _on_text_focus_out)
+    prompt_box.bind("<FocusIn>", _pin)
+    prompt_box.bind("<FocusOut>", _pout)
 
-    # クイックプロンプトボタン
-    quick_frame = tk.Frame(tab_agent, bg=BG)
-    quick_frame.pack(fill="x", padx=12, pady=(0, 8))
-    tk.Label(quick_frame, text="クイック:", bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(side="left")
+    qf = tk.Frame(tab_edit, bg=BG)
+    qf.pack(fill="x", padx=12, pady=(0, 8))
+    for lbl, pt in [
+        ("フィラー除去", "えー・あの・まあ等フィラーと無音をすべてカット"),
+        ("テンポアップ", "沈黙・間延びを積極的カットしてテンポアップ"),
+        ("Shorts用",    "YouTube Shorts向け: フィラーなし・テンポよく・字幕付き"),
+        ("冒頭カット",  "冒頭の挨拶・タイトルコールをカット"),
+    ]:
+        tk.Button(qf, text=lbl, bg=BG3, fg=MUTED, relief="flat",
+                  font=("Helvetica", 9), cursor="hand2", padx=5, pady=2,
+                  command=lambda p=pt: (
+                      prompt_box.configure(fg=TEXT),
+                      prompt_box.delete("1.0", "end"),
+                      prompt_box.insert("1.0", p),
+                  )).pack(side="left", padx=2)
 
-    quick_prompts = [
-        ("冒頭カット", "冒頭の挨拶・タイトルコールをカット"),
-        ("フィラー除去", "えー、あの、まあ などのフィラーワードをすべてカット"),
-        ("告知カット", "チャンネル登録・いいね・SNS告知のセグメントをカット"),
-        ("テンポ強化", "テンポよく：沈黙・間延びを積極的にカットしてテンポアップ"),
-    ]
+    # スタイル選択
+    sr = tk.Frame(tab_edit, bg=BG)
+    sr.pack(fill="x", padx=12, pady=(0, 10))
+    tk.Label(sr, text="スタイル:", bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(side="left", padx=(0, 6))
+    style_var = tk.StringVar(value="なし（デフォルト）")
+    style_combo = ttk.Combobox(sr, textvariable=style_var, state="readonly",
+                                font=("Helvetica", 9), width=30)
+    style_combo["values"] = ["なし（デフォルト）"]
+    style_combo.current(0)
+    style_combo.pack(side="left")
 
-    for label, prompt in quick_prompts:
-        btn = tk.Button(quick_frame, text=label, bg=BG3, fg=MUTED, relief="flat",
-                        font=("Helvetica", 9), cursor="hand2",
-                        padx=6, pady=2,
-                        command=lambda p=prompt: (
-                            agent_text.configure(fg=TEXT),
-                            agent_text.delete("1.0", "end"),
-                            agent_text.insert("1.0", p),
-                        ))
-        btn.pack(side="left", padx=2)
+    edit_status = tk.Label(tab_edit, text="クリップを選択して「AIで編集」をクリック",
+                           bg=BG, fg=MUTED, font=("Helvetica", 9), wraplength=460)
+    edit_status.pack(fill="x", padx=12, pady=(0, 4))
+    edit_progress = ttk.Progressbar(tab_edit, mode="indeterminate")
+    edit_progress.pack(fill="x", padx=12, pady=(0, 8))
 
-    agent_status = status_bar(tab_agent, "")
+    result_lbl = tk.Label(tab_edit, text="", bg=BG2, fg=MUTED,
+                          font=("Helvetica", 10), wraplength=460, justify="left",
+                          pady=6, padx=8)
+    result_lbl.pack(fill="x", padx=12, pady=(0, 8))
 
-    agent_progress = ttk.Progressbar(tab_agent, mode="indeterminate", style="TProgressbar")
-    agent_progress.pack(fill="x", padx=12, pady=(0, 8))
+    def _set_est(msg, fg=MUTED):
+        edit_status.configure(text=msg, fg=fg)
+        edit_status.update_idletasks()
 
-    def _start_agent_edit():
-        # ジョブ選択チェック
-        idx = agent_combo.current()
-        if idx < 0 or idx >= len(jobs_data):
-            messagebox.showwarning("選択なし", "対象ジョブを選択してください", parent=root)
+    def _run_ai_edit():
+        idx = clip_cb.current()
+        if not resolve:
+            messagebox.showerror("エラー", "DaVinci Resolve に接続できません", parent=root)
             return
-        job_id = jobs_data[idx]["job_id"]
-
-        prompt = agent_text.get("1.0", "end").strip()
-        if not prompt or prompt.startswith("例:"):
-            messagebox.showwarning("入力なし", "編集指示を入力してください", parent=root)
+        if idx < 0 or idx >= len(_clips):
+            messagebox.showwarning("未選択", "クリップを選択してください", parent=root)
+            return
+        if not _API_URL or not _API_TOKEN:
+            messagebox.showwarning("設定不足", "設定タブで API URL と Token を入力してください",
+                                   parent=root)
+            nb.select(tab_settings)
             return
 
-        btn_agent_send.configure(state="disabled", text="処理中...")
-        agent_progress.start(10)
-        set_status(agent_status, "AI 編集リクエストを送信中...", MUTED)
+        prompt = prompt_box.get("1.0", "end").strip()
+        if prompt == PLACEHOLDER:
+            prompt = ""
 
-        def _run():
+        s_idx     = style_combo.current()
+        prof_id   = ""
+        if s_idx > 0 and s_idx - 1 < len(styles_data):
+            prof_id = styles_data[s_idx - 1].get("id", "")
+
+        media_clip = _clips[idx]
+        try:
+            props     = media_clip.GetClipProperty() or {}
+            file_path = props.get("File Path", "")
+        except Exception:
+            file_path = ""
+
+        if not file_path or not Path(file_path).exists():
+            messagebox.showerror("ファイルエラー",
+                                 f"ファイルが見つかりません:\n{file_path}", parent=root)
+            return
+
+        btn_run.configure(state="disabled", text="処理中...")
+        edit_progress.start(10)
+        result_lbl.configure(text="処理中...", fg=MUTED)
+
+        def _worker():
             try:
-                resp = api_post(f"/plugin/jobs/{job_id}/agent-edit", {"prompt": prompt})
-                new_job_id = resp.get("job_id")
-                if not new_job_id:
-                    raise ValueError("ジョブIDが取得できませんでした")
-                set_status(agent_status, "処理中... (完了まで1〜3分かかります)", MUTED)
-                _poll_agent_job(job_id=new_job_id, original_job_id=job_id)
+                video_id = upload_video(file_path, on_progress=_set_est)
+                _set_est("AI処理を開始中...")
+                job_id = _api("POST", f"/videos/process/{video_id}",
+                              {"prompt": prompt, "style_profile_id": prof_id} if prof_id else
+                              {"prompt": prompt},
+                              timeout=30)["job_id"]
+                _set_est("AI編集中... (1〜3分)")
+                for _ in range(180):
+                    time.sleep(3)
+                    resp   = api_get(f"/jobs/{job_id}")
+                    status = resp.get("status", "")
+                    prog   = resp.get("progress", "")
+                    if prog:
+                        _set_est(f"処理中: {prog}")
+                    if status == "completed":
+                        break
+                    if status == "failed":
+                        raise RuntimeError(resp.get("error_message") or "処理失敗")
+                else:
+                    raise RuntimeError("タイムアウト")
+
+                _set_est("カット情報取得中...")
+                details = api_get(f"/plugin/jobs/{job_id}/details")
+                cuts    = details.get("cuts") or []
+                fps     = float(details.get("fps") or 30)
+                dur     = float(details.get("duration") or 0)
+                srt_ok  = details.get("has_mp4", False) or True  # SRT は別途確認
+
+                # SRT 可否チェック
+                try:
+                    api_get(f"/plugin/jobs/{job_id}/srt", timeout=5)
+                    srt_ok = True
+                except Exception:
+                    srt_ok = False
+
+                _set_est("DaVinci タイムラインを生成中...")
+                try:
+                    clip_name = (media_clip.GetClipProperty() or {}).get("Clip Name", "clip")
+                except Exception:
+                    clip_name = "clip"
+                tl_name = f"EditClone_{clip_name[:18]}"
+                _, result = apply_cuts_to_timeline(resolve, media_clip, cuts, fps, tl_name)
+
+                if result != "ok":
+                    raise RuntimeError(f"タイムライン生成失敗: {result}")
+
+                # 状態更新
+                st_set("job_id",       job_id)
+                st_set("fps",          fps)
+                st_set("duration",     dur)
+                st_set("cuts",         cuts)
+                st_set("srt_available", srt_ok)
+                st_set("source_clip",  media_clip)
+
+                # 会話履歴をリセット
+                _chat_history.clear()
+
+                n = len(cuts)
+                _set_est(f"✓ 完了！{n} セグメントでタイムライン生成", GREEN)
+                root.after(0, lambda: result_lbl.configure(
+                    text=f"✓ タイムライン「{tl_name}」を作成\n"
+                         f"セグメント: {n}  FPS: {fps}  時間: {dur:.1f}s\n"
+                         "💬 チャットタブでさらに編集できます",
+                    fg=GREEN,
+                ))
+                root.after(0, lambda: nb.select(tab_chat))
+
+                # ジョブ履歴更新
+                threading.Thread(target=_load_jobs, daemon=True).start()
+
             except Exception as e:
-                agent_progress.stop()
-                btn_agent_send.configure(state="normal", text="🤖 AI編集を開始")
-                set_status(agent_status, f"エラー: {e}", RED)
+                _set_est(f"エラー: {e}", RED)
+                root.after(0, lambda err=e: (
+                    result_lbl.configure(text=str(err), fg=RED),
+                    messagebox.showerror("エラー", str(err), parent=root),
+                ))
+            finally:
+                root.after(0, lambda: (
+                    edit_progress.stop(),
+                    btn_run.configure(state="normal", text="🤖 AIで編集"),
+                ))
 
-        threading.Thread(target=_run, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()
 
-    def _poll_agent_job(job_id: str, original_job_id: str):
-        max_attempts = 120
-        for attempt in range(max_attempts):
-            time.sleep(3)
+    btn_run = ttk.Button(tab_edit, text="🤖 AIで編集",
+                         style="P.TButton", command=_run_ai_edit)
+    btn_run.pack(fill="x", padx=12, pady=(0, 4))
+    ttk.Button(tab_edit, text="↻ クリップリストを更新",
+               command=_reload_clips).pack(fill="x", padx=12, pady=(0, 12))
+
+    # ================================================================
+    # タブ2: 💬 チャット（インタラクティブ編集）
+    # ================================================================
+    tab_chat = ttk.Frame(nb)
+    nb.add(tab_chat, text="💬 チャット")
+
+    # ジョブ選択バー
+    job_row = tk.Frame(tab_chat, bg=BG2, height=36)
+    job_row.pack(fill="x")
+    job_row.pack_propagate(False)
+    tk.Label(job_row, text="ジョブ:", bg=BG2, fg=MUTED,
+             font=("Helvetica", 9)).pack(side="left", padx=(10, 4), pady=8)
+    job_sel_var = tk.StringVar(value="─ AI編集タブで処理すると自動設定 ─")
+    job_sel_cb  = ttk.Combobox(job_row, textvariable=job_sel_var, state="readonly",
+                                font=("Helvetica", 9), width=38)
+    job_sel_cb["values"] = ["─ AI編集タブで処理すると自動設定 ─"]
+    job_sel_cb.current(0)
+    job_sel_cb.pack(side="left", padx=(0, 6), pady=4)
+
+    def _on_job_sel(*_):
+        idx = job_sel_cb.current()
+        if idx <= 0 or idx - 1 >= len(jobs_data):
+            return
+        j = jobs_data[idx - 1]
+        st_set("job_id",  j["job_id"])
+        st_set("fps",     float(j.get("fps", 30)))
+        st_set("cuts",    [])
+        _chat_history.clear()
+        _append_chat("system", f"ジョブ「{j['video_name']}」を選択しました。\n指示を入力してください。")
+
+    job_sel_cb.bind("<<ComboboxSelected>>", _on_job_sel)
+
+    # チャット表示エリア
+    chat_frame = tk.Frame(tab_chat, bg=BG)
+    chat_frame.pack(fill="both", expand=True, padx=6, pady=(4, 0))
+
+    chat_text = tk.Text(
+        chat_frame,
+        state="disabled",
+        bg=BG,
+        fg=TEXT,
+        font=("Helvetica", 10),
+        relief="flat",
+        wrap="word",
+        spacing1=2,
+        spacing3=4,
+        padx=8,
+        pady=4,
+    )
+    chat_scroll = ttk.Scrollbar(chat_frame, orient="vertical", command=chat_text.yview)
+    chat_text.configure(yscrollcommand=chat_scroll.set)
+    chat_scroll.pack(side="right", fill="y")
+    chat_text.pack(fill="both", expand=True)
+
+    # タグ定義
+    chat_text.tag_config("user_name",  foreground=PURPLE, font=("Helvetica", 9, "bold"))
+    chat_text.tag_config("user_msg",   foreground=TEXT,   lmargin1=8, lmargin2=8)
+    chat_text.tag_config("ai_name",    foreground=MUTED,  font=("Helvetica", 9, "bold"))
+    chat_text.tag_config("ai_msg",     foreground=TEXT,   lmargin1=8, lmargin2=8)
+    chat_text.tag_config("sys_ok",     foreground=GREEN,  lmargin1=8, lmargin2=8,
+                                        font=("Helvetica", 9))
+    chat_text.tag_config("sys_warn",   foreground=YELLOW, lmargin1=8, lmargin2=8,
+                                        font=("Helvetica", 9))
+    chat_text.tag_config("sys_err",    foreground=RED,    lmargin1=8, lmargin2=8,
+                                        font=("Helvetica", 9))
+    chat_text.tag_config("divider",    foreground=BORDER)
+
+    def _append_chat(role: str, text: str):
+        def _do():
+            chat_text.configure(state="normal")
+            if role == "user":
+                chat_text.insert("end", "あなた\n", "user_name")
+                chat_text.insert("end", f"{text}\n\n", "user_msg")
+            elif role == "assistant":
+                chat_text.insert("end", "EditClone AI\n", "ai_name")
+                chat_text.insert("end", f"{text}\n\n", "ai_msg")
+            elif role == "system":
+                icon = text[:1] if text[:1] in ("✓", "⚠", "✗") else "ℹ"
+                tag  = {"✓": "sys_ok", "⚠": "sys_warn", "✗": "sys_err"}.get(icon, "sys_ok")
+                chat_text.insert("end", f"{text}\n", tag)
+            elif role == "divider":
+                chat_text.insert("end", "─" * 50 + "\n", "divider")
+            chat_text.configure(state="disabled")
+            chat_text.see("end")
+        root.after(0, _do)
+
+    def _append_chat_sync(role: str, text: str):
+        """バックグラウンドスレッドからも呼べるラッパー。"""
+        _append_chat(role, text)
+
+    # 初期メッセージ
+    _append_chat("system", "✓ EditClone チャット準備完了")
+    _append_chat("system", "ℹ AI編集タブで動画を処理するか、上のジョブ選択で過去の処理を選んでください")
+
+    # チャット入力エリア
+    input_frame = tk.Frame(tab_chat, bg=BG2)
+    input_frame.pack(fill="x", side="bottom", padx=0, pady=0)
+
+    chat_input = tk.Text(
+        input_frame,
+        height=3,
+        bg=BG3,
+        fg=TEXT,
+        insertbackground=TEXT,
+        relief="flat",
+        font=("Helvetica", 11),
+        wrap="word",
+        borderwidth=0,
+        highlightthickness=1,
+        highlightbackground=BORDER,
+        highlightcolor=PURPLE,
+    )
+    chat_input.pack(fill="x", padx=8, pady=(6, 2))
+
+    btn_row = tk.Frame(input_frame, bg=BG2)
+    btn_row.pack(fill="x", padx=8, pady=(2, 6))
+
+    chat_status = tk.Label(btn_row, text="", bg=BG2, fg=MUTED, font=("Helvetica", 9))
+    chat_status.pack(side="left", padx=(0, 8))
+
+    def _set_cst(msg, fg=MUTED):
+        chat_status.configure(text=msg, fg=fg)
+        chat_status.update_idletasks()
+
+    def _send_message(event=None):
+        msg = chat_input.get("1.0", "end").strip()
+        if not msg:
+            return
+        if not _state.get("job_id"):
+            messagebox.showwarning("ジョブ未選択",
+                                   "AI編集タブで動画を処理してください", parent=root)
+            return
+        chat_input.delete("1.0", "end")
+        _append_chat("user", msg)
+        _chat_history.append({"role": "user", "content": msg})
+        _set_cst("AI が処理中...", MUTED)
+        btn_send.configure(state="disabled")
+
+        def _worker():
             try:
-                resp = api_get(f"/plugin/jobs/{job_id}/poll")
-                status = resp.get("status", "")
-                progress = resp.get("progress", "")
-                if progress:
-                    set_status(agent_status, f"処理中: {progress}", MUTED)
+                resp = api_post(
+                    f"/plugin/jobs/{_state['job_id']}/chat-edit",
+                    {"prompt": msg, "history": _chat_history[-10:]},
+                    timeout=60,
+                )
+                ops       = resp.get("operations") or []
+                fps       = float(resp.get("fps") or _state["fps"])
+                duration  = float(resp.get("duration") or _state["duration"])
+                srt_avail = resp.get("srt_available", _state["srt_available"])
 
-                if status == "completed":
-                    agent_progress.stop()
-                    btn_agent_send.configure(state="normal", text="🤖 AI編集を開始")
-                    set_status(agent_status, "✓ 編集完了！DaVinci にインポートします...", GREEN)
-                    _do_import(job_id, after_edit=True)
-                    threading.Thread(target=_load_jobs, daemon=True).start()
-                    return
-                elif status == "failed":
-                    raise ValueError(resp.get("error") or "処理に失敗しました")
-            except StopIteration:
-                break
+                st_set("fps",          fps)
+                st_set("duration",     duration)
+                st_set("srt_available", srt_avail)
+
+                # AI の説明文を生成
+                op_summary = "、".join(
+                    op.get("description") or op.get("type", "?")
+                    for op in ops
+                ) or "操作なし"
+                _append_chat("assistant", f"以下の編集を実行します:\n{op_summary}")
+                _chat_history.append({"role": "assistant", "content": op_summary})
+
+                _append_chat("divider", "")
+
+                # 操作適用
+                if not resolve:
+                    _append_chat("system", "⚠ DaVinci 未接続 — 操作を適用できません")
+                else:
+                    apply_all_operations(
+                        resolve, ops, _state,
+                        _state.get("source_clip"),
+                        _append_chat_sync,
+                    )
+
+                _append_chat("divider", "")
+                _set_cst("✓ 完了", GREEN)
+
             except Exception as e:
-                agent_progress.stop()
-                btn_agent_send.configure(state="normal", text="🤖 AI編集を開始")
-                set_status(agent_status, f"エラー: {e}", RED)
-                return
+                _append_chat("system", f"✗ エラー: {e}")
+                _set_cst(f"エラー: {e}", RED)
+            finally:
+                root.after(0, lambda: btn_send.configure(state="normal"))
 
-        agent_progress.stop()
-        btn_agent_send.configure(state="normal", text="🤖 AI編集を開始")
-        set_status(agent_status, "タイムアウト: Web で状態を確認してください", RED)
+        threading.Thread(target=_worker, daemon=True).start()
+        return "break"
 
-    btn_agent_send = ttk.Button(tab_agent, text="🤖 AI編集を開始",
-                                style="Primary.TButton", command=_start_agent_edit)
-    btn_agent_send.pack(fill="x", padx=12, pady=(0, 4))
+    def _on_enter(ev):
+        if ev.state & 0x1:  # Shift+Enter → 改行
+            return None
+        _send_message()
+        return "break"
 
-    ttk.Button(tab_agent, text="↻ ジョブ一覧を更新",
-               command=lambda: threading.Thread(target=lambda: (
-                   _load_jobs(), _refresh_agent_combo()
-               ), daemon=True).start()
-               ).pack(fill="x", padx=12, pady=(0, 12))
+    chat_input.bind("<Return>", _on_enter)
 
-    # ==============================
-    # スタイル タブ
-    # ==============================
+    btn_send = ttk.Button(btn_row, text="送信  ↵", style="P.TButton",
+                          command=_send_message)
+    btn_send.pack(side="right")
 
+    tk.Label(btn_row, text="Shift+Enter で改行", bg=BG2, fg=BORDER,
+             font=("Helvetica", 8)).pack(side="right", padx=(0, 10))
+
+    # ================================================================
+    # タブ3: 🎨 スタイル
+    # ================================================================
     tab_styles = ttk.Frame(nb)
     nb.add(tab_styles, text="🎨 スタイル")
 
-    styles_status = status_bar(tab_styles, "読み込み中...")
+    sty_status = tk.Label(tab_styles, text="読み込み中...", bg=BG, fg=MUTED,
+                          font=("Helvetica", 9))
+    sty_status.pack(fill="x", padx=12, pady=(8, 4))
 
-    styles_tree_frame = tk.Frame(tab_styles, bg=BG)
-    styles_tree_frame.pack(fill="both", expand=True, padx=10, pady=4)
+    sty_cols = ("act", "name", "noise", "silence")
+    sty_tree = ttk.Treeview(tab_styles, columns=sty_cols, show="headings", height=10)
+    sty_tree.heading("act",     text="")
+    sty_tree.heading("name",    text="プロファイル名")
+    sty_tree.heading("noise",   text="無音dB")
+    sty_tree.heading("silence", text="最小秒")
+    sty_tree.column("act",     width=22, stretch=False)
+    sty_tree.column("name",    width=180, stretch=True)
+    sty_tree.column("noise",   width=70,  stretch=False)
+    sty_tree.column("silence", width=70,  stretch=False)
+    sty_tree.pack(fill="both", expand=True, padx=10, pady=4)
 
-    styles_cols = ("status", "name", "noise", "silence")
-    styles_tree = ttk.Treeview(styles_tree_frame, columns=styles_cols, show="headings", height=8)
-    styles_tree.heading("status", text="")
-    styles_tree.heading("name", text="プロファイル名")
-    styles_tree.heading("noise", text="無音dB")
-    styles_tree.heading("silence", text="最小秒")
-    styles_tree.column("status", width=22, stretch=False)
-    styles_tree.column("name", width=160, stretch=True)
-    styles_tree.column("noise", width=70, stretch=False)
-    styles_tree.column("silence", width=70, stretch=False)
-    styles_tree.pack(fill="both", expand=True)
+    sty_btns = tk.Frame(tab_styles, bg=BG)
+    sty_btns.pack(fill="x", padx=10, pady=(0, 8))
 
-    styles_scroll = ttk.Scrollbar(styles_tree_frame, orient="vertical", command=styles_tree.yview)
-    styles_scroll.pack(side="right", fill="y")
-    styles_tree.configure(yscrollcommand=styles_scroll.set)
-
-    styles_detail = tk.Label(tab_styles, text="", bg=BG, fg=MUTED,
-                             font=("Helvetica", 9), wraplength=400, justify="left")
-    styles_detail.pack(fill="x", padx=10, pady=2)
-
-    styles_btns = tk.Frame(tab_styles, bg=BG)
-    styles_btns.pack(fill="x", padx=10, pady=(4, 8))
-
-    def _activate_selected_style():
-        sel = styles_tree.selection()
+    def _activate_style():
+        sel = sty_tree.selection()
         if not sel:
-            messagebox.showwarning("選択なし", "スタイルを選択してください", parent=root)
             return
-        profile_id = sel[0]  # iid = profile_id
-
+        pid = sel[0]
         def _run():
             try:
-                api_post(f"/plugin/style-profiles/{profile_id}/activate")
-                set_status(styles_status, "✓ スタイルを変更しました", GREEN)
+                api_post(f"/plugin/style-profiles/{pid}/activate")
+                sty_status.configure(text="✓ アクティブに設定しました", fg=GREEN)
                 threading.Thread(target=_load_styles, daemon=True).start()
             except Exception as e:
-                set_status(styles_status, f"エラー: {e}", RED)
-
+                sty_status.configure(text=f"エラー: {e}", fg=RED)
         threading.Thread(target=_run, daemon=True).start()
 
-    def _on_style_select(event):
-        sel = styles_tree.selection()
-        if not sel:
-            return
-        profile_id = sel[0]  # iid = profile_id
-        profile = next((p for p in styles_data if p["id"] == profile_id), None)
-        if profile:
-            prompt = (profile.get("default_prompt") or "")[:60]
-            styles_detail.configure(
-                text=f"プロンプト: 「{prompt}{'...' if len(profile.get('default_prompt') or '') > 60 else ''}」"
-                if prompt else "プロンプト未設定",
-                fg=TEXT,
-            )
-
-    styles_tree.bind("<<TreeviewSelect>>", _on_style_select)
-
-    ttk.Button(styles_btns, text="✓ アクティブに設定",
-               style="Primary.TButton", command=_activate_selected_style).pack(side="left", padx=(0, 6))
-    ttk.Button(styles_btns, text="↻ 更新",
+    ttk.Button(sty_btns, text="✓ アクティブに設定", style="P.TButton",
+               command=_activate_style).pack(side="left", padx=(0, 6))
+    ttk.Button(sty_btns, text="↻ 更新",
                command=lambda: threading.Thread(target=_load_styles, daemon=True).start()
                ).pack(side="right")
 
     def _load_styles():
-        set_status(styles_status, "読み込み中...", MUTED)
         try:
             resp = api_get("/plugin/style-profiles")
             styles_data.clear()
             styles_data.extend(resp.get("profiles", []))
-            _render_styles()
-            set_status(styles_status, f"{len(styles_data)} 件のプロファイル", MUTED)
+            root.after(0, _render_styles)
+            sty_status.configure(text=f"{len(styles_data)} 件")
         except Exception as e:
-            set_status(styles_status, f"取得エラー: {e}", RED)
+            sty_status.configure(text=f"取得エラー: {e}", fg=RED)
 
     def _render_styles():
-        styles_tree.delete(*styles_tree.get_children())
+        sty_tree.delete(*sty_tree.get_children())
+        vals = ["なし（デフォルト）"]
         for p in styles_data:
-            active = "★" if p.get("is_active") else ""
-            noise = str(p.get("noise_db", -30))
-            silence = str(p.get("min_silence_seconds", 0.5))
-            styles_tree.insert("", "end", iid=p["id"],
-                               values=(active, p["name"], noise, silence))
+            sty_tree.insert("", "end", iid=p["id"],
+                            values=("★" if p.get("is_active") else "", p["name"],
+                                    p.get("noise_db", -30),
+                                    p.get("min_silence_seconds", 0.5)))
+            vals.append(p["name"])
+        style_combo["values"] = vals
+        if style_combo.current() < 0:
+            style_combo.current(0)
 
-    # ==============================
-    # 設定 タブ
-    # ==============================
-
+    # ================================================================
+    # タブ4: ⚙️ 設定
+    # ================================================================
     tab_settings = ttk.Frame(nb)
     nb.add(tab_settings, text="⚙️ 設定")
 
     tk.Label(tab_settings, text="EditClone API URL:", bg=BG, fg=MUTED,
              font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(16, 2))
     url_var = tk.StringVar(value=_API_URL)
-    url_entry = ttk.Entry(tab_settings, textvariable=url_var, font=("Helvetica", 10))
-    url_entry.pack(fill="x", padx=12, pady=(0, 10))
+    ttk.Entry(tab_settings, textvariable=url_var,
+              font=("Helvetica", 10)).pack(fill="x", padx=12, pady=(0, 10))
 
-    tk.Label(tab_settings, text="API トークン:", bg=BG, fg=MUTED,
+    tk.Label(tab_settings, text="API トークン (eck_...):", bg=BG, fg=MUTED,
              font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=(0, 2))
     token_var = tk.StringVar(value=_API_TOKEN)
-    token_entry = ttk.Entry(tab_settings, textvariable=token_var, show="•",
-                             font=("Helvetica", 10))
-    token_entry.pack(fill="x", padx=12, pady=(0, 10))
+    ttk.Entry(tab_settings, textvariable=token_var, show="•",
+              font=("Helvetica", 10)).pack(fill="x", padx=12, pady=(0, 10))
 
-    settings_status = status_bar(tab_settings, "")
+    set_status = tk.Label(tab_settings, text="", bg=BG, fg=MUTED, font=("Helvetica", 9))
+    set_status.pack(fill="x", padx=12, pady=(0, 6))
 
     def _save_settings():
         global _API_URL, _API_TOKEN
-        url = url_var.get().strip().rstrip("/")
+        url   = url_var.get().strip().rstrip("/")
         token = token_var.get().strip()
         if not url or not token:
-            set_status(settings_status, "URL と Token を両方入力してください", RED)
+            set_status.configure(text="URL と Token を両方入力してください", fg=RED)
             return
         _API_URL = url
         _API_TOKEN = token
         _save_config(url, token)
-        set_status(settings_status, "✓ 設定を保存しました", GREEN)
-        # 保存後にデータをリロード
+        set_status.configure(text="✓ 保存しました", fg=GREEN)
         threading.Thread(target=lambda: (_load_jobs(), _load_styles()), daemon=True).start()
 
-    def _test_connection():
+    def _test_conn():
         url = url_var.get().strip().rstrip("/")
-        token = token_var.get().strip()
-        if not url:
-            set_status(settings_status, "URL を入力してください", RED)
-            return
-        set_status(settings_status, "接続テスト中...", MUTED)
-
+        set_status.configure(text="接続テスト中...", fg=MUTED)
         def _run():
             try:
                 req = urllib.request.Request(f"{url}/health")
                 with urllib.request.urlopen(req, timeout=5) as r:
-                    data = json.loads(r.read())
-                ver = data.get("version", "?")
-                set_status(settings_status, f"✓ 接続成功 (v{ver})", GREEN)
+                    ver = json.loads(r.read()).get("version", "?")
+                set_status.configure(text=f"✓ 接続成功 (v{ver})", fg=GREEN)
             except Exception as e:
-                set_status(settings_status, f"接続失敗: {e}", RED)
-
+                set_status.configure(text=f"接続失敗: {e}", fg=RED)
         threading.Thread(target=_run, daemon=True).start()
 
-    btns_s = tk.Frame(tab_settings, bg=BG)
-    btns_s.pack(fill="x", padx=12, pady=4)
-    ttk.Button(btns_s, text="保存", style="Primary.TButton",
+    def _show_diag():
+        lines = [
+            f"DaVinci: {'✓ 接続済み' if resolve else '✗ 未接続'}",
+            f"Python:  {sys.executable}",
+            f"版数:    {sys.version.split()[0]}",
+            "",
+        ] + (_RESOLVE_ERRORS or ["(ログなし)"])
+        messagebox.showinfo("診断", "\n".join(lines), parent=root)
+
+    btns = tk.Frame(tab_settings, bg=BG)
+    btns.pack(fill="x", padx=12, pady=6)
+    ttk.Button(btns, text="保存", style="P.TButton",
                command=_save_settings).pack(side="left", padx=(0, 6))
-    ttk.Button(btns_s, text="接続テスト",
-               command=_test_connection).pack(side="left")
+    ttk.Button(btns, text="接続テスト",
+               command=_test_conn).pack(side="left", padx=(0, 6))
+    ttk.Button(btns, text="DaVinci 診断",
+               command=_show_diag).pack(side="left")
 
     tk.Label(tab_settings,
-             text="トークンの取得:\nEditClone ウェブアプリ → アカウント → Plugin Token",
-             bg=BG, fg=MUTED, font=("Helvetica", 9), justify="left").pack(
-        anchor="w", padx=12, pady=(16, 4))
-
-    tk.Label(tab_settings,
-             text=f"設定ファイル: {_CONFIG_PATH}",
+             text="トークン取得: EditClone Web → アカウント → APIキーを生成",
+             bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(anchor="w", padx=12, pady=(16, 4))
+    tk.Label(tab_settings, text=f"設定ファイル: {_CONFIG_PATH}",
              bg=BG, fg=BORDER, font=("Helvetica", 8)).pack(anchor="w", padx=12)
 
-    # ==============================
-    # 初期データ読み込み
-    # ==============================
+    # ================================================================
+    # 共有ロード関数
+    # ================================================================
+
+    def _load_jobs():
+        try:
+            resp = api_get("/plugin/jobs")
+            jobs_data.clear()
+            jobs_data.extend(resp.get("jobs", []))
+            root.after(0, _update_job_selector)
+        except Exception:
+            pass
+
+    def _update_job_selector():
+        if not jobs_data:
+            return
+        vals = ["─ ジョブを選択 ─"] + [
+            f"{j['video_name']}  ({(j.get('created_at') or '')[:10]})"
+            for j in jobs_data
+        ]
+        job_sel_cb["values"] = vals
+        # 現在の job_id を選択
+        cur = _state.get("job_id", "")
+        if cur:
+            for i, j in enumerate(jobs_data):
+                if j["job_id"] == cur:
+                    job_sel_cb.current(i + 1)
+                    break
+        elif jobs_data:
+            job_sel_cb.current(0)
+
+    # ================================================================
+    # 初期ロード
+    # ================================================================
 
     def _initial_load():
         time.sleep(0.3)
         if _API_URL and _API_TOKEN:
             _load_jobs()
             _load_styles()
-            root.after(0, _refresh_agent_combo)
         else:
-            set_status(jobs_status, "設定タブで API URL と Token を入力してください", RED)
-            nb.select(tab_settings)
+            root.after(0, lambda: nb.select(tab_settings))
+        if resolve:
+            root.after(0, _reload_clips)
 
     threading.Thread(target=_initial_load, daemon=True).start()
-
     root.mainloop()
-
-
-# ================================================================
-# コンソールフォールバック（tkinter 利用不可時）
-# ================================================================
-
-def run_console():
-    global _API_URL, _API_TOKEN
-    print("EditClone Import (Console Mode)")
-
-    resolve = get_resolve()
-    if not resolve:
-        print("[ERROR] DaVinci Resolve に接続できません")
-        return
-
-    try:
-        jobs_resp = api_get("/plugin/jobs")
-        jobs = jobs_resp.get("jobs", [])
-    except Exception as e:
-        print(f"[ERROR] API エラー: {e}")
-        return
-
-    if not jobs:
-        print("完了済みジョブがありません")
-        return
-
-    print("\n=== 完了済みジョブ ===")
-    for i, j in enumerate(jobs[:10]):
-        print(f"  [{i+1}] {j['video_name']} — {(j.get('created_at') or '')[:10]}")
-
-    choice = input("\nインポートするジョブ番号 [1]: ").strip()
-    idx = int(choice) - 1 if choice else 0
-    if idx < 0 or idx >= len(jobs):
-        idx = 0
-
-    job = jobs[idx]
-    print(f"選択: {job['video_name']}")
-
-    files = _download_and_extract(job["job_id"])
-    result = import_to_resolve(resolve, files)
-    print(f"インポート結果: {result}")
 
 
 # ================================================================
@@ -815,25 +1218,20 @@ def main():
     _API_URL, _API_TOKEN = _load_config()
 
     if not _API_URL or not _API_TOKEN:
-        # GUI で初期設定
         try:
             import tkinter as tk
             from tkinter import simpledialog
             root = tk.Tk()
             root.withdraw()
-            url = simpledialog.askstring(
-                "EditClone 設定",
-                "EditClone API URL:\n例: https://your-app.railway.app",
-                parent=root,
-            )
-            token = simpledialog.askstring(
-                "EditClone 設定",
-                "Plugin トークンを貼り付けてください",
-                parent=root,
-            )
+            url   = simpledialog.askstring("EditClone 設定",
+                                           "EditClone API URL:\n例: https://xxx.railway.app",
+                                           parent=root)
+            token = simpledialog.askstring("EditClone 設定",
+                                           "API トークン (eck_...)",
+                                           parent=root)
             root.destroy()
             if url and token:
-                _API_URL = url.strip().rstrip("/")
+                _API_URL   = url.strip().rstrip("/")
                 _API_TOKEN = token.strip()
                 _save_config(_API_URL, _API_TOKEN)
         except Exception:

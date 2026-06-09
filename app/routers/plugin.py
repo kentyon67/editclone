@@ -31,6 +31,11 @@ class AgentEditRequest(BaseModel):
     style_profile_id: Optional[str] = None
 
 
+class ChatEditRequest(BaseModel):
+    prompt: str
+    history: list = []
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -331,3 +336,49 @@ def plugin_srt(job_id: str, user: dict = Depends(require_user)):
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{job_id}.srt"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Interactive (chat) editing
+# ---------------------------------------------------------------------------
+
+@router.post("/jobs/{job_id}/chat-edit")
+def plugin_chat_edit(
+    job_id: str,
+    body: ChatEditRequest,
+    user: dict = Depends(require_user),
+):
+    """
+    プロンプトを AI で解析して DaVinci 向け編集操作リストを即時返す。
+    新規ジョブを作らずトランスクリプトを再利用するため高速。
+    """
+    job = get_job(job_id)
+    if not job or job.user_id != user["id"]:
+        raise HTTPException(404, "Job not found")
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    transcript = result.get("transcript") or {}
+    current_cuts = result.get("cuts") or []
+    info = result.get("info") or {}
+    fps = float(info.get("fps", 30))
+    duration = float(info.get("duration_seconds", 0))
+
+    from app.services.interactive_edit import parse_edit_prompt
+    operations = parse_edit_prompt(
+        prompt=body.prompt,
+        transcript=transcript,
+        current_cuts=current_cuts,
+        duration=duration,
+        fps=fps,
+        history=body.history,
+    )
+
+    return {
+        "operations": operations,
+        "job_id": job_id,
+        "fps": fps,
+        "duration": duration,
+        "srt_available": bool(result.get("srt")),
+    }
