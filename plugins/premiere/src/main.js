@@ -302,7 +302,44 @@ async function startAgentEdit() {
   const progressEl = $("agent-progress-text");
   if (progressEl) progressEl.textContent = "AI 編集を開始中...";
 
+  // プロンプトが複雑な場合はエージェントチームモードを試みる
+  const useTeams = prompt.length > 20 || prompt.includes(",") || prompt.includes("、");
+
+  if (useTeams && progressEl) {
+    progressEl.textContent = "🤖 エージェントチーム起動中...";
+  }
+
   try {
+    // まず team-edit エンドポイントで即時編集操作を取得する（ジョブなし・高速）
+    const teamRes = await fetch(`${API_BASE}/plugin/jobs/${jobId}/team-edit`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ prompt, history: [], use_teams: useTeams }),
+    });
+
+    if (teamRes.ok) {
+      const teamData = await teamRes.json();
+      const agentReports = teamData.agent_reports || {};
+      const agentSucceeded = teamData.agents_succeeded || [];
+      const synthesis = teamData.synthesis || "";
+
+      // エージェント協調完了を表示してから agent-edit に移行
+      if (agentSucceeded.length > 0 && progressEl) {
+        progressEl.textContent = `🤖 ${agentSucceeded.length} エージェント協調完了`;
+        // 1秒後に通常のポーリングフロー（agent-edit）へ
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      // エージェントレポートをコンソールに出力（デバッグ用）
+      Object.entries(agentReports).forEach(([name, report]) => {
+        if (report && !report.startsWith("(")) {
+          console.log(`[EditClone ${name}]`, report.slice(0, 200));
+        }
+      });
+    }
+
+    // 通常の agent-edit フローに移行（バックグラウンドジョブとして処理）
+    if (progressEl) progressEl.textContent = "AI 編集ジョブを送信中...";
     const res = await fetch(`${API_BASE}/plugin/jobs/${jobId}/agent-edit`, {
       method: "POST",
       headers: authHeaders(),

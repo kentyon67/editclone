@@ -1,85 +1,167 @@
-# EditClone — Premiere Pro CEP Plugin
+# EditClone — Premiere Pro CEP Panel
 
-## 概要
+An HTML/JS panel for Premiere Pro using Adobe's CEP (Common Extensibility Platform) framework.
+The panel embeds the EditClone web app, lets you trigger AI edits, and imports Premiere XML
+directly into the active project.
 
-Premiere Pro のパネルから EditClone を呼び出し、AI 編集済み FCPXML を直接インポートできる CEP 拡張機能です。
+Compatible with Premiere Pro CC 2019 (v13.0) through Premiere Pro 2025.
+Distribute via Adobe Exchange (2–4 weeks review) or install locally for testing.
 
-## 開発環境
+---
 
-| 項目 | 要件 |
-|------|------|
-| Premiere Pro | CC 2019 (v13.0) 以上 |
-| OS | Windows / macOS |
-| Adobe Developer Console | 申請に必要 |
+## Requirements
 
-## ローカルでのインストール・テスト
+| Requirement | Minimum |
+|-------------|---------|
+| Premiere Pro | CC 2019 (v13.0 / CEP 9) |
+| OS | macOS 12+ or Windows 10+ |
+| Browser engine | CEP ships with a Chromium-based engine — no separate install needed |
 
-### 1. CEP デバッグモードを有効化
+---
+
+## Project Structure
+
+```
+plugins/premiere-cep/
+  CSXS/
+    manifest.xml         — Extension metadata (ID, host app, version ranges)
+  host/
+    host.jsx             — ExtendScript (runs in Premiere's scripting engine)
+  CSInterface.js         — Adobe CEP JavaScript bridge (bundled)
+  index.html             — Panel entry point
+  main.js                — Panel logic
+  style.css              — Panel styles
+  install.sh             — macOS installer
+  install.bat            — Windows installer
+  debug-enable.sh        — macOS: enable unsigned extension loading
+  debug-enable.bat       — Windows: enable unsigned extension loading
+```
+
+---
+
+## Local Installation
+
+### Step 1 — Enable unsigned extension loading (run once)
+
+Premiere Pro blocks unsigned extensions by default. These scripts set the `PlayerDebugMode`
+registry/plist key that allows locally installed extensions.
 
 **macOS:**
 ```bash
-defaults write com.adobe.CSXS.11 PlayerDebugMode 1
-```
-
-**Windows (管理者 PowerShell):**
-```powershell
-reg add "HKEY_CURRENT_USER\SOFTWARE\Adobe\CSXS.11" /v PlayerDebugMode /t REG_SZ /d 1 /f
-```
-
-### 2. プラグインをコピー
-
-**macOS:**
-```
-~/Library/Application Support/Adobe/CEP/extensions/com.editclone.premiere/
+bash plugins/premiere-cep/debug-enable.sh
 ```
 
 **Windows:**
 ```
-%APPDATA%\Adobe\CEP\extensions\com.editclone.premiere\
+plugins\premiere-cep\debug-enable.bat
 ```
 
-`premiere-cep/` フォルダ内のファイルをそのままコピーする（フォルダ名は `com.editclone.premiere`）。
+Verify on macOS:
+```bash
+defaults read com.adobe.CSXS.11 PlayerDebugMode
+# Expected output: 1
+```
 
-### 3. CSInterface.js を配置
+Verify on Windows:
+```
+reg query "HKCU\Software\Adobe\CSXS.11" /v PlayerDebugMode
+# Expected: ... REG_SZ    1
+```
 
-Adobe の公式 [CEP Resources](https://github.com/Adobe-CEP/CEP-Resources) から `CSInterface.js` をダウンロードして `premiere-cep/` に配置する。
+### Step 2 — Install the extension
 
-### 4. Premiere Pro を再起動
+**macOS:**
+```bash
+bash plugins/premiere-cep/install.sh
+```
 
-**Window > Extensions > EditClone** が表示される。
+**Windows:**
+```
+plugins\premiere-cep\install.bat
+```
 
-## Adobe Exchange への申請
+The installer copies all files to:
+- macOS: `~/Library/Application Support/Adobe/CEP/extensions/com.editclone.premiere/`
+- Windows: `%APPDATA%\Adobe\CEP\extensions\com.editclone.premiere\`
 
-1. [Adobe Developer Console](https://developer.adobe.com/developer-console/) でアプリ登録
-2. Exchange 申請フォームに以下を記入:
-   - **Product**: Premiere Pro
-   - **Category**: Video Editing
-   - **Description**: AI による無音カット・テロップ自動生成。編集済み FCPXML を Premiere に直接インポート。
-3. ZCC パッケージを作成して提出
+### Step 3 — Restart Premiere Pro
 
-**審査期間: 約 2〜4 週間**
+Quit and reopen Premiere Pro. Go to **Window > Extensions > EditClone**.
 
-## デプロイ URL の変更
+---
 
-`main.js` の `EDITCLONE_URL` を本番 URL に変更:
+## Manual Installation
+
+If you prefer to install manually:
+
+1. Copy the entire `premiere-cep/` folder to:
+   - macOS: `~/Library/Application Support/Adobe/CEP/extensions/com.editclone.premiere/`
+   - Windows: `%APPDATA%\Adobe\CEP\extensions\com.editclone.premiere\`
+2. Make sure the folder is named exactly `com.editclone.premiere`.
+3. Verify `CSXS/manifest.xml` is present inside that folder.
+
+---
+
+## Debugging the Panel
+
+CEP panels run in an embedded Chromium browser. You can open Chrome DevTools:
+
+1. In `CSXS/manifest.xml`, confirm `<Parameter>--enable-nodejs</Parameter>` is present.
+2. Open a Chromium browser and go to: `http://localhost:7777`
+3. You should see the EditClone panel listed. Click "inspect".
+
+If port 7777 is not responding, add the debug port to `manifest.xml`:
+
+```xml
+<CEFCommandLine>
+  <Parameter>--remote-debugging-port=7777</Parameter>
+  <Parameter>--enable-nodejs</Parameter>
+  <Parameter>--mixed-context</Parameter>
+</CEFCommandLine>
+```
+
+---
+
+## Changing the API URL
+
+The panel connects directly to the backend API. The URL is hardcoded in `main.js`:
+
 ```javascript
-var EDITCLONE_URL = "https://your-production-url.vercel.app/ja/dashboard?plugin=premiere";
+// Line near the top of main.js
+var EDITCLONE_URL = "https://editclone.vercel.app/ja/dashboard?plugin=premiere";
 ```
 
-## 動作フロー
-
-```
-Premiere Pro 起動
-  └─ Window > Extensions > EditClone
-       └─ EditClone パネル表示
-            └─ EditClone Web アプリ (iframe)
-                 └─ ログイン → 動画アップロード → AI 処理
-                      └─ 「Premiere Pro にインポート」ボタン
-                           └─ ZIP ダウンロード → ExtendScript でインポート
+For local backend development, change to:
+```javascript
+var EDITCLONE_URL = "http://localhost:8000";
 ```
 
-## 注意事項
+---
 
-- FCPXML を Premiere にインポートするには Premiere が XML インポートに対応している必要がある
-- XML インポートが効かない場合はユーザーが ZIP を解凍して手動インポートできる（案内メッセージ表示）
-- `CSInterface.js` は Adobe のライセンスのためリポジトリに含めていない
+## Packaging for Adobe Exchange
+
+1. Download ZXPSignCmd from [Adobe's GitHub](https://github.com/Adobe-CEP/CEP-Resources/tree/master/ZXPSignCMD).
+2. Create a self-signed certificate (for testing) or use your Exchange certificate:
+   ```bash
+   ZXPSignCmd -selfSignedCert US CA EditClone EditClone password editclone.p12
+   ```
+3. Package the extension:
+   ```bash
+   ZXPSignCmd -sign plugins/premiere-cep/ EditClone.zxp editclone.p12 password
+   ```
+4. Submit `EditClone.zxp` via [Adobe Developer Console](https://developer.adobe.com/developer-console/).
+
+Review takes approximately 2–4 weeks.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|---------|
+| Extension not in Window > Extensions | Run `debug-enable` again; verify Premiere version >= CC 2019 |
+| Panel shows blank white screen | Check DevTools at http://localhost:7777 for JS errors |
+| `CSInterface is not defined` | `CSInterface.js` is missing — it should be in the extension root |
+| ExtendScript errors in host.jsx | Open the ExtendScript Toolkit (ESTK) for debugging |
+| "PlayerDebugMode" key not taking effect | Some Premiere installations use a higher CSXS version; the installer sets 9-12 |
+| Import fails silently | Check the browser console for network errors; verify the token is valid |
