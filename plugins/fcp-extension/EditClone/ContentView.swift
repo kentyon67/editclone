@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    // 本番デプロイURLに合わせて変更すること
-    private let baseURL = "https://frontend-six-bice-51.vercel.app"
+    private let baseURL = "https://editclone.vercel.app"
 
     var body: some View {
         EditCloneWebView(url: URL(string: "\(baseURL)/ja/dashboard?plugin=fcp")!)

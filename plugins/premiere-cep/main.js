@@ -51,26 +51,219 @@ function handleImportPremiereXML(jobId, token, apiBase) {
     return;
   }
 
-  var xmlUrl = apiBase + "/plugin/jobs/" + jobId + "/premiere-xml";
-  showBanner("Premiere XML をダウンロード中...", "loading");
+  showBanner("プロジェクトをダウンロード中...", "loading");
 
-  downloadWithAuth(xmlUrl, token, jobId + "_editclone.xml", function (localPath, err) {
-    if (err || !localPath) {
-      showBanner("ダウンロードエラー: " + (err || "不明"), "error");
+  // まずフル ZIP を試みる（メディア込みで展開してパス書き換え）
+  downloadAndRewriteXML(jobId, token, apiBase, function (xmlPath, err) {
+    if (err || !xmlPath) {
+      // フォールバック: XML のみ（メディアはオフライン）
+      var xmlUrl = apiBase + "/plugin/jobs/" + jobId + "/premiere-xml";
+      downloadWithAuth(xmlUrl, token, jobId + "_editclone.xml", function (localPath, err2) {
+        if (err2 || !localPath) {
+          showBanner("ダウンロードエラー: " + (err2 || "不明"), "error");
+          return;
+        }
+        showBanner("Premiere Pro にインポート中...", "loading");
+        importXMLViaExtendScript(localPath, function (result) {
+          handleImportResult(result, jobId, token, apiBase, true);
+        });
+      });
       return;
     }
     showBanner("Premiere Pro にインポート中...", "loading");
-    importXMLViaExtendScript(localPath, function (result) {
-      if (result === "ok") {
-        showBanner("✓ インポート完了！ プロジェクトパネルを確認してください", "success");
-        setTimeout(hideBanner, 5000);
-      } else if (result && result.indexOf("unzip_required") !== -1) {
-        showBanner("ファイルを保存しました。Premiere で手動で File > Import してください", "info");
-      } else {
-        showBanner("インポートエラー: " + result, "error");
-      }
+    importXMLViaExtendScript(xmlPath, function (result) {
+      handleImportResult(result, jobId, token, apiBase, false);
     });
   });
+}
+
+function handleImportResult(result, jobId, token, apiBase, mediaOffline) {
+  if (result === "ok") {
+    var msg = "✓ インポート完了！";
+    if (mediaOffline) msg += " メディアがオフラインの場合は右クリック → Link Media で元ファイルを指定してください";
+    showBanner(msg, "success");
+    sendImplicitFeedbackCEP(jobId, token, apiBase);
+    setTimeout(hideBanner, 6000);
+  } else if (result && result.indexOf("unzip_required") !== -1) {
+    showBanner("ファイルを保存しました。Premiere で手動で File > Import してください", "info");
+  } else {
+    showBanner("インポートエラー: " + result, "error");
+  }
+}
+
+// ----- ZIP ダウンロード + 展開 + パス書き換え -----
+
+function downloadAndRewriteXML(jobId, token, apiBase, callback) {
+  try {
+    var os = require("os");
+    var path = require("path");
+    var fs = require("fs");
+    var https = require("https");
+    var http = require("http");
+    var childProcess = require("child_process");
+
+    var zipUrl = apiBase + "/jobs/" + jobId + "/download";
+    var tmpDir = path.join(os.tmpdir(), "editclone_" + jobId);
+    var zipPath = path.join(os.tmpdir(), jobId + "_project.zip");
+
+    // ZIP をダウンロード
+    var file = fs.createWriteStream(zipPath);
+    var protocol = zipUrl.startsWith("https") ? https : http;
+    var parsedUrl = require("url").parse(zipUrl);
+    var options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (zipUrl.startsWith("https") ? 443 : 80),
+      path: parsedUrl.path,
+      headers: { "Authorization": "Bearer " + token }
+    };
+
+    protocol.get(options, function (response) {
+      if (response.statusCode !== 200) {
+        callback(null, "HTTP " + response.statusCode);
+        return;
+      }
+      response.pipe(file);
+      file.on("finish", function () {
+        file.close(function () {
+          // ZIP を展開
+          try {
+            if (!fs.existsSync(tmpDir)) {
+              fs.mkdirSync(tmpDir, { recursive: true });
+            }
+            var unzipCmd;
+            if (process.platform === "win32") {
+              unzipCmd = 'powershell -command "Expand-Archive -Force \'' +
+                zipPath.replace(/'/g, "''") + "' '" + tmpDir.replace(/'/g, "''") + "'"+ '"';
+            } else {
+              unzipCmd = "/usr/bin/unzip -o " + JSON.stringify(zipPath) + " -d " + JSON.stringify(tmpDir);
+            }
+            childProcess.execSync(unzipCmd, { timeout: 30000 });
+
+            // XMEML を探す
+            var xmlPath = findFileRecursive(tmpDir, ".xml");
+            if (!xmlPath) {
+              callback(null, "xml_not_found");
+              return;
+            }
+
+            // media ディレクトリを探してパスを書き換え
+            var mediaDir = findDirRecursive(tmpDir, "media");
+            if (mediaDir) {
+              var xmlContent = fs.readFileSync(xmlPath, "utf8");
+              var absMediaUrl;
+              if (process.platform === "win32") {
+                // Windows: file:///C:/path/to/media/
+                absMediaUrl = "file:///" + mediaDir.replace(/\\/g, "/") + "/";
+              } else {
+                absMediaUrl = "file://" + mediaDir + "/";
+              }
+              xmlContent = xmlContent.replace(/\.\/media\//g, absMediaUrl);
+              var rewrittenPath = path.join(tmpDir, jobId + "_relinked.xml");
+              fs.writeFileSync(rewrittenPath, xmlContent, "utf8");
+              callback(rewrittenPath, null);
+            } else {
+              callback(xmlPath, null);
+            }
+          } catch (e) {
+            callback(null, e.message);
+          }
+        });
+      });
+    }).on("error", function (e) {
+      callback(null, e.message);
+    });
+  } catch (e) {
+    callback(null, e.message);
+  }
+}
+
+function findFileRecursive(dir, ext) {
+  try {
+    var fs = require("fs");
+    var path = require("path");
+    var items = fs.readdirSync(dir);
+    for (var i = 0; i < items.length; i++) {
+      var full = path.join(dir, items[i]);
+      var stat = fs.statSync(full);
+      if (stat.isDirectory()) {
+        var found = findFileRecursive(full, ext);
+        if (found) return found;
+      } else if (full.endsWith(ext)) {
+        return full;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function findDirRecursive(dir, name) {
+  try {
+    var fs = require("fs");
+    var path = require("path");
+    var items = fs.readdirSync(dir);
+    for (var i = 0; i < items.length; i++) {
+      var full = path.join(dir, items[i]);
+      var stat = fs.statSync(full);
+      if (stat.isDirectory()) {
+        if (items[i] === name) return full;
+        var found = findDirRecursive(full, name);
+        if (found) return found;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+// ----- 暗黙的学習: インポート完了後に自動フィードバック送信 -----
+
+function sendImplicitFeedbackCEP(jobId, token, apiBase) {
+  try {
+    var https = require("https");
+    var http = require("http");
+    var detailsUrl = apiBase + "/plugin/jobs/" + jobId + "/details";
+    var parsedUrl = require("url").parse(detailsUrl);
+    var protocol = detailsUrl.startsWith("https") ? https : http;
+    var options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (detailsUrl.startsWith("https") ? 443 : 80),
+      path: parsedUrl.path,
+      headers: { "Authorization": "Bearer " + token }
+    };
+    var chunks = [];
+    protocol.get(options, function (res) {
+      res.on("data", function (d) { chunks.push(d); });
+      res.on("end", function () {
+        try {
+          var details = JSON.parse(Buffer.concat(chunks).toString());
+          var projectId = details.project_id;
+          if (!projectId) return;
+
+          var revUrl = apiBase + "/projects/" + projectId + "/revisions";
+          var parsedRev = require("url").parse(revUrl);
+          var body = JSON.stringify({
+            notes: "auto:premiere_cep_import",
+            metadata: { source: "premiere_cep", job_id: jobId }
+          });
+          var revProto = revUrl.startsWith("https") ? https : http;
+          var revOpts = {
+            hostname: parsedRev.hostname,
+            port: parsedRev.port || (revUrl.startsWith("https") ? 443 : 80),
+            path: parsedRev.path,
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + token,
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(body)
+            }
+          };
+          var req = revProto.request(revOpts, function () {});
+          req.on("error", function () {});
+          req.write(body);
+          req.end();
+        } catch (_) {}
+      });
+    }).on("error", function () {});
+  } catch (_) {}
 }
 
 // ----- ファイルダウンロード (認証ヘッダー付き, Node.js) -----

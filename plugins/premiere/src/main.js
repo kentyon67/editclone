@@ -204,8 +204,11 @@ async function importJob(jobId) {
       [xmlFile.nativePath], true, app.project.getInsertionBin(), false
     );
     if (imported) {
-      if (statusEl) statusEl.textContent = "✅ インポート完了！";
-      setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 1500);
+      if (statusEl) statusEl.textContent =
+        "✅ インポート完了！ メディアがオフラインの場合は右クリック → Link Media で元ファイルを指定してください";
+      // 暗黙的学習: インポート完了 = 肯定的フィードバックとして自動記録
+      sendImplicitFeedback(jobId).catch(() => {});
+      setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 2500);
     } else {
       throw new Error("インポートに失敗しました");
     }
@@ -213,6 +216,27 @@ async function importJob(jobId) {
     if (statusEl) statusEl.textContent = `❌ ${err.message}`;
     setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 3000);
   }
+}
+
+async function sendImplicitFeedback(jobId) {
+  try {
+    const detailsRes = await fetch(`${API_BASE}/plugin/jobs/${jobId}/details`, {
+      headers: authHeaders(),
+    });
+    if (!detailsRes.ok) return;
+    const details = await detailsRes.json();
+    const projectId = details.project_id;
+    if (!projectId) return;
+
+    await fetch(`${API_BASE}/projects/${projectId}/revisions`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        notes: "auto:premiere_import",
+        metadata: { source: "premiere_uxp", job_id: jobId },
+      }),
+    });
+  } catch (_) {}
 }
 
 async function downloadSRT(jobId) {

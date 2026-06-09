@@ -118,14 +118,91 @@ struct EditCloneWebView: NSViewRepresentable {
             }
         }
 
-        // MARK: - FCPXML インポート（認証ヘッダー付き）
+        // MARK: - FCPXML インポート（ZIP展開 + パス書き換え）
 
         private func importFCPXMLWithAuth(jobId: String, token: String, apiBase: String) {
+            // ZIP全体をダウンロードしてメディアも一緒に展開する
+            guard let url = URL(string: "\(apiBase)/jobs/\(jobId)/download") else { return }
+            var request = URLRequest(url: url, timeoutInterval: 180)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            notifyWebApp(event: "importStatus", payload: ["message": "プロジェクトをダウンロード中...", "success": true])
+
+            URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+                guard let self = self else { return }
+                guard let data = data,
+                      let httpResp = response as? HTTPURLResponse,
+                      (200...299).contains(httpResp.statusCode) else {
+                    // フォールバック: FCPXML のみダウンロード（メディアはオフライン）
+                    self.importFCPXMLOnly(jobId: jobId, token: token, apiBase: apiBase)
+                    return
+                }
+
+                let fm = FileManager.default
+                let tmpDir = fm.temporaryDirectory.appendingPathComponent("editclone_\(jobId)")
+                try? fm.removeItem(at: tmpDir)
+                try? fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+                let zipPath = tmpDir.appendingPathComponent("project.zip")
+                guard (try? data.write(to: zipPath)) != nil else {
+                    self.importFCPXMLOnly(jobId: jobId, token: token, apiBase: apiBase)
+                    return
+                }
+
+                self.notifyWebApp(event: "importStatus", payload: ["message": "ファイルを展開中...", "success": true])
+
+                // /usr/bin/unzip で展開
+                let extractDir = tmpDir.appendingPathComponent("extracted")
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                process.arguments = ["-o", zipPath.path, "-d", extractDir.path]
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                } catch {
+                    self.importFCPXMLOnly(jobId: jobId, token: token, apiBase: apiBase)
+                    return
+                }
+
+                // FCPXML を探す
+                guard let fcpxmlURL = self.findFile(in: extractDir, extension: "fcpxml"),
+                      var fcpxmlContent = try? String(contentsOf: fcpxmlURL, encoding: .utf8) else {
+                    self.importFCPXMLOnly(jobId: jobId, token: token, apiBase: apiBase)
+                    return
+                }
+
+                // media ディレクトリを探してパスを絶対URLに書き換え
+                if let mediaDir = self.findSubdir(named: "media", in: extractDir) {
+                    // URLエンコード: スペース等をパーセントエンコード
+                    let mediaPath = mediaDir.path
+                        .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? mediaDir.path
+                    fcpxmlContent = fcpxmlContent
+                        .replacingOccurrences(of: "./media/", with: "file://\(mediaPath)/")
+                }
+
+                // 書き換えた FCPXML を保存
+                let outFcpxml = extractDir.appendingPathComponent("\(jobId)_relinked.fcpxml")
+                guard (try? fcpxmlContent.write(to: outFcpxml, atomically: true, encoding: .utf8)) != nil else {
+                    self.importFCPXMLOnly(jobId: jobId, token: token, apiBase: apiBase)
+                    return
+                }
+
+                self.notifyWebApp(event: "importStatus", payload: [
+                    "message": "Final Cut Pro でインポート中...", "success": true
+                ])
+                DispatchQueue.main.async {
+                    self.openFCPXML(at: outFcpxml)
+                    // 暗黙的学習: インポート完了 = 肯定的フィードバックとして自動記録
+                    self.sendAutoRevision(jobId: jobId, token: token, apiBase: apiBase)
+                }
+            }.resume()
+        }
+
+        // MARK: - FCPXML のみインポート（ZIP展開失敗時のフォールバック）
+
+        private func importFCPXMLOnly(jobId: String, token: String, apiBase: String) {
             guard let url = URL(string: "\(apiBase)/plugin/jobs/\(jobId)/fcpxml") else { return }
             var request = URLRequest(url: url, timeoutInterval: 60)
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            notifyWebApp(event: "importStatus", payload: ["message": "FCPXML をダウンロード中...", "success": true])
 
             URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
                 guard let self = self else { return }
@@ -148,6 +225,57 @@ struct EditCloneWebView: NSViewRepresentable {
                     .appendingPathComponent("\(jobId).fcpxml")
                 try? data.write(to: tmpURL)
                 DispatchQueue.main.async { self.openFCPXML(at: tmpURL) }
+            }.resume()
+        }
+
+        // MARK: - ファイル・ディレクトリ検索ヘルパー
+
+        private func findFile(in directory: URL, extension ext: String) -> URL? {
+            guard let enumerator = FileManager.default.enumerator(
+                at: directory, includingPropertiesForKeys: nil
+            ) else { return nil }
+            for case let url as URL in enumerator {
+                if url.pathExtension == ext { return url }
+            }
+            return nil
+        }
+
+        private func findSubdir(named name: String, in directory: URL) -> URL? {
+            guard let enumerator = FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: [.isDirectoryKey]
+            ) else { return nil }
+            for case let url as URL in enumerator {
+                if url.lastPathComponent == name {
+                    var isDir: ObjCBool = false
+                    if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                       isDir.boolValue { return url }
+                }
+            }
+            return nil
+        }
+
+        // MARK: - 暗黙的学習: インポート完了後に自動でリビジョン送信
+
+        private func sendAutoRevision(jobId: String, token: String, apiBase: String) {
+            guard let url = URL(string: "\(apiBase)/plugin/jobs/\(jobId)/details") else { return }
+            var request = URLRequest(url: url, timeoutInterval: 15)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+                guard let self = self,
+                      let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let projectId = json["project_id"] as? String,
+                      !projectId.isEmpty else { return }
+
+                self.sendRevision(
+                    projectId: projectId,
+                    notes: "auto:fcp_import",
+                    metadata: ["source": "fcp_extension", "job_id": jobId],
+                    token: token,
+                    apiBase: apiBase
+                )
             }.resume()
         }
 
