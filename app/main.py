@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.routers import api_keys, billing, jobs, metrics, plugin, projects, style_profiles, teams, usage, videos, webhooks
+from app.routers import admin, api_keys, billing, jobs, metrics, plugin, projects, style_profiles, teams, usage, videos, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(admin.router)
 app.include_router(metrics.router)
 app.include_router(videos.router)
 app.include_router(jobs.router)
