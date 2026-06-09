@@ -478,7 +478,7 @@ def run_job(job_id: str) -> None:
                 trigger_webhooks(job.user_id, "job.completed", {
                     "job_id": job.id,
                     "video_id": job.video_id,
-                    "video_filename": job.video_filename,
+                    "video_filename": job.video_path.name,
                     "cut_count": len(cuts),
                     "has_mp4": mp4_bytes is not None,
                 })

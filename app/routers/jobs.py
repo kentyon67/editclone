@@ -174,6 +174,9 @@ def job_mp4(job_id: str):
 
 @router.get("/{job_id}/premiere-xml")
 def job_premiere_xml(job_id: str):
+    import io
+    import zipfile
+
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
@@ -181,6 +184,25 @@ def job_premiere_xml(job_id: str):
         raise HTTPException(status_code=400, detail="Job not completed yet")
 
     data = job.result.get("premiere_xml_bytes")
+    if not data:
+        # ZIP フォールバック: premiere/{stem}.xml を抽出
+        zip_bytes = job.result.get("zip_bytes")
+        if not zip_bytes:
+            zip_path = job.result.get("zip_path", "")
+            if zip_path:
+                try:
+                    zip_bytes = _fetch_from_storage(zip_path)
+                except Exception:
+                    pass
+        if zip_bytes:
+            try:
+                with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                    xml_names = [n for n in zf.namelist() if n.endswith(".xml")]
+                    if xml_names:
+                        data = zf.read(xml_names[0])
+            except Exception:
+                pass
+
     if not data:
         raise HTTPException(status_code=404, detail="Premiere XML not available")
 
@@ -194,6 +216,9 @@ def job_premiere_xml(job_id: str):
 
 @router.get("/{job_id}/edl")
 def job_edl(job_id: str):
+    import io
+    import zipfile
+
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
@@ -201,6 +226,24 @@ def job_edl(job_id: str):
         raise HTTPException(status_code=400, detail="Job not completed yet")
 
     data = job.result.get("edl_bytes")
+    if not data:
+        zip_bytes = job.result.get("zip_bytes")
+        if not zip_bytes:
+            zip_path = job.result.get("zip_path", "")
+            if zip_path:
+                try:
+                    zip_bytes = _fetch_from_storage(zip_path)
+                except Exception:
+                    pass
+        if zip_bytes:
+            try:
+                with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+                    edl_names = [n for n in zf.namelist() if n.endswith(".edl")]
+                    if edl_names:
+                        data = zf.read(edl_names[0])
+            except Exception:
+                pass
+
     if not data:
         raise HTTPException(status_code=404, detail="EDL not available")
 

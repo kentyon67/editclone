@@ -323,7 +323,7 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
         return "⚠", f"速度変更 API 未対応（DaVinci で手動: クリップ右クリック → Change Speed → {speed_pct:.0f}%）"
 
     # ── 音量調整 ───────────────────────────────────────────
-    if op_type == "volume":
+    if op_type in ("audio", "volume"):
         vol_db = float(op.get("volume_db", 0))
         tl = _get_current_timeline(resolve)
         if not tl:
@@ -1014,8 +1014,8 @@ def run_gui():
             # ここでは style profile の切り替え情報だけ送る
             if project_id:
                 api_post(f"/projects/{project_id}/revisions", {
-                    "source": "davinci_plugin",
-                    "metadata": {"via": "chat_edit"},
+                    "notes": "auto:davinci_chat_edit",
+                    "metadata": {"source": "davinci_plugin", "via": "chat_edit"},
                 })
         except Exception:
             pass

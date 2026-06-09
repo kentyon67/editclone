@@ -303,10 +303,24 @@ def plugin_fcpxml(job_id: str, user: dict = Depends(require_user)):
 
 @router.get("/jobs/{job_id}/premiere-xml")
 def plugin_premiere_xml(job_id: str, user: dict = Depends(require_user)):
+    import io
+    import zipfile
+
     job = get_job(job_id)
     if not job or job.user_id != user["id"] or job.status != JobStatus.completed:
         raise HTTPException(404, "Job not found or not completed")
     data = (job.result or {}).get("premiere_xml_bytes")
+    if not data:
+        # ZIP フォールバック: premiere/{stem}.xml を抽出
+        zip_data = _load_zip(job_id)
+        if zip_data:
+            try:
+                with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+                    xml_names = [n for n in zf.namelist() if n.endswith(".xml")]
+                    if xml_names:
+                        data = zf.read(xml_names[0])
+            except Exception:
+                pass
     if not data:
         raise HTTPException(404, "Premiere XML not available")
     return Response(
