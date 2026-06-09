@@ -1,6 +1,9 @@
 """
 インタラクティブ編集サービス
-プロンプトを解析して DaVinci Resolve 向け編集操作リストを生成する。
+プロンプトを解析して NLE 向け編集操作リストを生成する。
+DaVinci: Python API で cut/subtitle/zoom/marker/audio を直接適用。
+         speed/transition/text/color は FCPXML インポートで適用。
+FCP/Premiere: 全操作を FCPXML/XMEML に変換してインポート。
 """
 import json
 import os
@@ -21,37 +24,60 @@ def _get_client() -> anthropic.Anthropic:
 
 _OPERATION_SCHEMA = """
 返すJSONは操作オブジェクトの配列です。複数同時指定可。
+各操作には必ず "description" フィールドで日本語の説明を含める。
 
-操作タイプ一覧:
+━━ 操作タイプ一覧 ━━
 
-1. カット構成変更
+1. カット構成変更（最重要）
 {"type":"cut", "keep_segments":[{"start":float,"end":float},...], "description":"説明"}
+- keep_segments は保持する区間。カットしたい部分は除外する。
+- 指定した区間が連結されてタイムラインになる。
 
-2. 再生速度
+2. 冒頭/末尾トリム
+{"type":"trim", "start_seconds":float, "end_seconds":float, "description":"説明"}
+- start_seconds: 冒頭から何秒カットするか（0以上）
+- end_seconds: 末尾から何秒カットするか（0以上）
+
+3. 再生速度変更
 {"type":"speed", "speed_percent":int, "description":"説明"}
-※ 100=通常 150=1.5倍 200=2倍
-
-3. 音量調整
-{"type":"volume", "target":"all|voice|bgm", "volume_db":float, "description":"説明"}
+- 100=等速, 150=1.5倍速, 200=2倍速, 50=0.5倍速
+- DaVinci: FCPXML インポートで適用。FCP/Premiere: 直接適用。
 
 4. 字幕追加
 {"type":"subtitle", "description":"説明"}
+- SRT ファイルを自動生成してタイムラインに追加する。
 
 5. ズーム
 {"type":"zoom", "zoom_level":float, "description":"説明"}
-※ 1.0=等倍 1.1=10%拡大
+- 1.0=等倍, 1.05=subtle(5%拡大), 1.10=punch(10%拡大)
+- DaVinci: ZoomX/ZoomY で即時適用。FCP/Premiere: FCPXML で適用。
 
-6. 冒頭/末尾トリム
-{"type":"trim", "start_seconds":float, "end_seconds":float, "description":"説明"}
+6. トランジション追加（クリップ間）
+{"type":"transition", "style":"dissolve|fade_to_black|wipe", "duration":float, "description":"説明"}
+- duration: トランジション時間（秒）、デフォルト 0.5s
+- DaVinci: FCPXML インポートで適用。
 
-7. カラー調整(参考指示)
+7. テキストオーバーレイ
+{"type":"text", "text":"表示テキスト", "start":float, "duration":float, "description":"説明"}
+- start: 表示開始秒, duration: 表示時間（秒）
+- DaVinci: FCPXML インポートで適用。
+
+8. 音量・フェード調整
+{"type":"audio", "target":"all|voice|bgm", "volume_db":float, "description":"説明"}
+- volume_db: +3.0=+3dB, -6.0=-6dB など
+- DaVinci: 直接適用可能（SetProperty）。
+
+9. カラー補正
 {"type":"color", "preset":"warm|cool|cinematic|bright|dark|bw", "description":"説明"}
+- DaVinci: カラーページに自動遷移。FCP/Premiere: FCPXML の colorCorrection で適用。
 
-8. BGM追加(参考指示)
-{"type":"bgm", "mood":"upbeat|calm|dramatic|happy|none", "description":"説明"}
+10. マーカー追加
+{"type":"marker", "moments":[{"time":float,"label":"str","color":"red|orange|yellow|green|blue|purple"},...], "description":"説明"}
+- time: 秒単位のタイムコード
 
-9. マーカー追加
-{"type":"marker", "moments":[{"time":float,"label":"str"}], "description":"説明"}
+11. BGM追加（案内のみ）
+{"type":"bgm", "mood":"upbeat|calm|dramatic|happy|sad|none", "description":"説明"}
+- NLE の BGM 追加 API は存在しないため、案内メッセージを返す。
 """
 
 
@@ -77,29 +103,33 @@ def parse_edit_prompt(
 
     current_cut_summary = (
         f"{len(current_cuts)} セグメント, "
-        f"合計 {sum(c.get('end',0)-c.get('start',0) for c in current_cuts):.1f}秒"
+        f"合計 {sum(c.get('end', 0) - c.get('start', 0) for c in current_cuts):.1f}秒"
         if current_cuts else "カット未実施"
     )
 
-    system = f"""あなたはDaVinci Resolve向けの動画編集AIアシスタントです。
+    system = f"""あなたはNLE（DaVinci Resolve・Final Cut Pro・Premiere Pro）向けの動画編集AIアシスタントです。
 ユーザーの編集指示を解析し、適用すべき操作のJSON配列のみを返してください。
 
 === 動画情報 ===
 長さ: {duration:.1f}秒  FPS: {fps}
 現在のカット状況: {current_cut_summary}
 
-=== トランスクリプト ===
+=== トランスクリプト（先頭80セグメント） ===
 {transcript_preview}
 
 === 操作スキーマ ===
 {_OPERATION_SCHEMA}
 
 === ルール ===
-- JSON配列のみ返す。前後の説明文は不要
-- keep_segments は 0〜{duration:.1f} 秒の範囲で指定
-- カット指示がある場合は必ず全区間をカバーする keep_segments を返す
-- 「フィラーをカット」「無音を削除」等は transcript を参照して具体的な区間を算出する
-- 複数の操作を同時に組み合わせてよい
+- JSON配列のみ返す。前後の説明文は不要。
+- keep_segments は 0〜{duration:.1f} 秒の範囲で指定。
+- カット指示がある場合は必ず全区間をカバーする keep_segments を返す。
+- 「フィラーをカット」「えー・あー・うーを除去」等は transcript を参照して具体的な区間を算出する。
+- 「テンポアップ」は speed 150 + cut(無音区間を積極除去) の組み合わせが効果的。
+- 「Shorts向け」は trim + cut で1分以内にまとめる。
+- bgm 操作は description に具体的なアドバイスを含める（例: 「BGMトラックへ曲を追加してください」）。
+- color 操作は description にプリセットの効果を説明する（例: 「warm: 暖色系の映像に仕上がります」）。
+- 複数の操作を組み合わせて返してよい。
 """
 
     msgs: list[dict] = []
@@ -110,7 +140,7 @@ def parse_edit_prompt(
     client = _get_client()
     resp = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=3000,
+        max_tokens=4000,
         system=system,
         messages=msgs,
     )
@@ -127,5 +157,4 @@ def parse_edit_prompt(
         except json.JSONDecodeError:
             pass
 
-    # フォールバック
     return [{"type": "error", "description": f"解析失敗。raw: {text[:200]}"}]

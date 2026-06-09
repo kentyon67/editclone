@@ -202,8 +202,8 @@ def apply_cuts_to_timeline(resolve, media_clip, cuts: list, fps: float, name: st
     media_pool = project.GetMediaPool()
     infos = []
     for seg in cuts:
-        sf = int(float(seg.get("start", 0)) * fps)
-        ef = int(float(seg.get("end",   0)) * fps)
+        sf = round(float(seg.get("start", 0)) * fps)
+        ef = round(float(seg.get("end",   0)) * fps)
         if ef > sf:
             infos.append({"mediaPoolItem": media_clip, "startFrame": sf,
                           "endFrame": ef, "mediaType": 1})
@@ -397,7 +397,6 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
         preset = op.get("preset", "")
         tl = _get_current_timeline(resolve)
         if tl:
-            # フラグで色ラベルを付ける（カラーページへの誘導）
             color_map = {
                 "warm": "Orange", "cool": "Blue", "cinematic": "Purple",
                 "bright": "Yellow", "dark": "Navy", "bw": "Beige",
@@ -408,6 +407,11 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
                     item.AddFlag(flag)
             except Exception:
                 pass
+        # カラーページへ自動遷移
+        try:
+            resolve.OpenPage("color")
+        except Exception:
+            pass
         instructions = {
             "warm":      "Color Wheels: Lift/Gamma/Gain を橙寄りに、Saturation +10",
             "cool":      "Color Wheels: Lift/Gamma/Gain を青寄りに、Saturation -5",
@@ -417,7 +421,7 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
             "bw":        "Saturation を 0 に設定",
         }
         msg = instructions.get(preset, f"preset={preset}")
-        return "⚠", f"カラー({preset}): DaVinci Color ページで手動調整してください\n→ {msg}\n（クリップにフラグを付けました）"
+        return "⚠", f"カラー({preset}): Color ページを開きました — {msg}"
 
     # ── BGM ───────────────────────────────────────────────
     if op_type == "bgm":
@@ -547,6 +551,7 @@ def run_gui():
     # 共有状態
     _state: dict = {
         "job_id": "",
+        "project_id": "",
         "fps": 30.0,
         "duration": 0.0,
         "cuts": [],
@@ -752,18 +757,12 @@ def run_gui():
                     raise RuntimeError("タイムアウト")
 
                 _set_est("カット情報取得中...")
-                details = api_get(f"/plugin/jobs/{job_id}/details")
-                cuts    = details.get("cuts") or []
-                fps     = float(details.get("fps") or 30)
-                dur     = float(details.get("duration") or 0)
-                srt_ok  = details.get("has_mp4", False) or True  # SRT は別途確認
-
-                # SRT 可否チェック
-                try:
-                    api_get(f"/plugin/jobs/{job_id}/srt", timeout=5)
-                    srt_ok = True
-                except Exception:
-                    srt_ok = False
+                details    = api_get(f"/plugin/jobs/{job_id}/details")
+                cuts       = details.get("cuts") or []
+                fps        = float(details.get("fps") or 30)
+                dur        = float(details.get("duration") or 0)
+                srt_ok     = details.get("srt_available", False)
+                project_id = details.get("project_id") or ""
 
                 _set_est("DaVinci タイムラインを生成中...")
                 try:
@@ -777,12 +776,13 @@ def run_gui():
                     raise RuntimeError(f"タイムライン生成失敗: {result}")
 
                 # 状態更新
-                st_set("job_id",       job_id)
-                st_set("fps",          fps)
-                st_set("duration",     dur)
-                st_set("cuts",         cuts)
+                st_set("job_id",        job_id)
+                st_set("project_id",    project_id)
+                st_set("fps",           fps)
+                st_set("duration",      dur)
+                st_set("cuts",          cuts)
                 st_set("srt_available", srt_ok)
-                st_set("source_clip",  media_clip)
+                st_set("source_clip",   media_clip)
 
                 # 会話履歴をリセット
                 _chat_history.clear()
@@ -944,6 +944,82 @@ def run_gui():
         chat_status.configure(text=msg, fg=fg)
         chat_status.update_idletasks()
 
+    # FCPXML インポート用 (speed/transition/text などのPython非対応操作)
+    _pending_ops_for_fcpxml: list = []
+
+    def _do_fcpxml_import():
+        ops = list(_pending_ops_for_fcpxml)
+        job_id = _state.get("job_id", "")
+        if not job_id or not ops:
+            return
+        btn_import_fcpxml.configure(state="disabled", text="インポート中...")
+        _append_chat("system", "ℹ FCPXML を生成・インポート中...")
+
+        def _run():
+            try:
+                # rich FCPXML を取得
+                req = urllib.request.Request(
+                    f"{_API_URL}/plugin/jobs/{job_id}/rich-fcpxml",
+                    data=json.dumps({"operations": ops}).encode(),
+                    method="POST",
+                )
+                _add_auth(req)
+                req.add_header("Content-Type", "application/json")
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    fcpxml_bytes = r.read()
+
+                # ローカルに保存
+                videos_dir = "Videos" if sys.platform == "win32" else "Movies"
+                out_dir = Path.home() / videos_dir / "EditClone" / job_id
+                out_dir.mkdir(parents=True, exist_ok=True)
+                fcpxml_path = out_dir / "rich_edit.fcpxml"
+                fcpxml_path.write_bytes(fcpxml_bytes)
+
+                # DaVinci に FCPXML をインポート
+                if resolve:
+                    try:
+                        project = resolve.GetProjectManager().GetCurrentProject()
+                        media_pool = project.GetMediaPool()
+                        tl = media_pool.ImportTimelineFromFile(str(fcpxml_path))
+                        if tl:
+                            project.SetCurrentTimeline(tl)
+                            _append_chat("system", f"✓ FCPXML をインポートしました: {tl.GetName()}")
+                        else:
+                            _append_chat("system",
+                                f"⚠ FCPXML 保存済み: {fcpxml_path}\n"
+                                "DaVinci でファイル → タイムラインをインポート → ファイルを選択")
+                    except Exception as e:
+                        _append_chat("system",
+                            f"⚠ 自動インポート失敗: {e}\n"
+                            f"手動でインポート: {fcpxml_path}")
+                else:
+                    _append_chat("system", f"ℹ FCPXML 保存: {fcpxml_path}")
+            except Exception as e:
+                _append_chat("system", f"✗ FCPXML エラー: {e}")
+            finally:
+                root.after(0, lambda: btn_import_fcpxml.configure(
+                    state="disabled", text="📥 FCPXML インポート済み"
+                ))
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _send_implicit_feedback():
+        """チャット編集後に暗黙的フィードバックを送信する（バックグラウンド）。"""
+        try:
+            job_id     = _state.get("job_id", "")
+            project_id = _state.get("project_id", "")
+            if not job_id:
+                return
+            # フィードバック送信はバックエンドの auto-accept ルートで十分なため
+            # ここでは style profile の切り替え情報だけ送る
+            if project_id:
+                api_post(f"/projects/{project_id}/revisions", {
+                    "source": "davinci_plugin",
+                    "metadata": {"via": "chat_edit"},
+                })
+        except Exception:
+            pass
+
     def _send_message(event=None):
         msg = chat_input.get("1.0", "end").strip()
         if not msg:
@@ -957,6 +1033,8 @@ def run_gui():
         _chat_history.append({"role": "user", "content": msg})
         _set_cst("AI が処理中...", MUTED)
         btn_send.configure(state="disabled")
+        # FCPXML インポートボタンを隠す
+        root.after(0, lambda: btn_import_fcpxml.pack_forget())
 
         def _worker():
             try:
@@ -965,16 +1043,16 @@ def run_gui():
                     {"prompt": msg, "history": _chat_history[-10:]},
                     timeout=60,
                 )
-                ops       = resp.get("operations") or []
-                fps       = float(resp.get("fps") or _state["fps"])
-                duration  = float(resp.get("duration") or _state["duration"])
-                srt_avail = resp.get("srt_available", _state["srt_available"])
+                ops             = resp.get("operations") or []
+                fps             = float(resp.get("fps") or _state["fps"])
+                duration        = float(resp.get("duration") or _state["duration"])
+                srt_avail       = resp.get("srt_available", _state["srt_available"])
+                needs_fcpxml    = resp.get("needs_fcpxml_import", False)
 
                 st_set("fps",          fps)
                 st_set("duration",     duration)
                 st_set("srt_available", srt_avail)
 
-                # AI の説明文を生成
                 op_summary = "、".join(
                     op.get("description") or op.get("type", "?")
                     for op in ops
@@ -984,7 +1062,6 @@ def run_gui():
 
                 _append_chat("divider", "")
 
-                # 操作適用
                 if not resolve:
                     _append_chat("system", "⚠ DaVinci 未接続 — 操作を適用できません")
                 else:
@@ -995,7 +1072,25 @@ def run_gui():
                     )
 
                 _append_chat("divider", "")
+
+                # Python API 非対応の操作がある場合 → FCPXML インポートボタンを表示
+                if needs_fcpxml and ops:
+                    _pending_ops_for_fcpxml.clear()
+                    _pending_ops_for_fcpxml.extend(ops)
+                    _append_chat("system",
+                        "ℹ 速度・トランジション等の操作は FCPXML 経由でインポートできます"
+                    )
+                    root.after(0, lambda: (
+                        btn_import_fcpxml.configure(
+                            state="normal", text="📥 FCPXML でインポート (速度/トランジション等)"
+                        ),
+                        btn_import_fcpxml.pack(fill="x", padx=8, pady=(0, 4), before=btn_send),
+                    ))
+
                 _set_cst("✓ 完了", GREEN)
+
+                # 暗黙的フィードバック（バックグラウンド）
+                threading.Thread(target=_send_implicit_feedback, daemon=True).start()
 
             except Exception as e:
                 _append_chat("system", f"✗ エラー: {e}")
@@ -1020,6 +1115,14 @@ def run_gui():
 
     tk.Label(btn_row, text="Shift+Enter で改行", bg=BG2, fg=BORDER,
              font=("Helvetica", 8)).pack(side="right", padx=(0, 10))
+
+    # FCPXML インポートボタン（speed/transition 等の Python API 非対応操作用）
+    # 必要な時だけ pack() で表示する
+    btn_import_fcpxml = ttk.Button(
+        input_frame, text="📥 FCPXML でインポート",
+        style="B.TButton", command=_do_fcpxml_import,
+    )
+    # 初期状態では非表示
 
     # ================================================================
     # タブ3: 🎨 スタイル

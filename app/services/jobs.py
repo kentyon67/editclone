@@ -516,6 +516,22 @@ def run_job(job_id: str) -> None:
             except Exception as e:
                 logger.warning("プロジェクト自動作成に失敗: %s", e)
 
+        # 暗黙的学習: ジョブ完了 = 肯定的フィードバックとして自動記録
+        if job.user_id:
+            try:
+                from app.services.style_profiles import get_active_profile, record_feedback
+                active_profile = get_active_profile(job.user_id)
+                if active_profile:
+                    record_feedback(
+                        user_id=job.user_id,
+                        job_id=job.id,
+                        action="accept",
+                        style_profile_id=active_profile["id"],
+                        notes="auto:job_complete",
+                    )
+            except Exception as e:
+                logger.debug("暗黙的学習フィードバック記録に失敗: %s", e)
+
     except Exception as exc:
         job.status = JobStatus.failed
         job.error = str(exc)

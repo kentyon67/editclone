@@ -68,6 +68,52 @@ def _kept_segments(
     return segments
 
 
+# ---------------------------------------------------------------------------
+# Operation helpers
+# ---------------------------------------------------------------------------
+
+def _speed_factor(operations: list[dict]) -> float:
+    """操作リストから速度倍率を返す (1.0 = 等速)。"""
+    for op in (operations or []):
+        if op.get("type") == "speed":
+            pct = float(op.get("speed_percent", 100))
+            return max(0.1, pct / 100.0)
+    return 1.0
+
+
+def _audio_db(operations: list[dict]) -> float | None:
+    """操作リストから音量調整 dB を返す。"""
+    for op in (operations or []):
+        if op.get("type") == "audio":
+            db = op.get("volume_db")
+            if db is not None:
+                return float(db)
+    return None
+
+
+def _transition_dur(operations: list[dict]) -> float:
+    """トランジション操作があれば持続時間(秒)を返す。なければ 0。"""
+    for op in (operations or []):
+        if op.get("type") == "transition":
+            return max(0.1, float(op.get("duration", 0.5)))
+    return 0.0
+
+
+def _text_ops(operations: list[dict]) -> list[dict]:
+    return [op for op in (operations or []) if op.get("type") == "text"]
+
+
+def _color_preset(operations: list[dict]) -> str | None:
+    for op in (operations or []):
+        if op.get("type") == "color":
+            return str(op.get("preset", ""))
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Main builder
+# ---------------------------------------------------------------------------
+
 def build_fcpxml(
     video_path: Path,
     noise_db: float = -30.0,
@@ -76,9 +122,14 @@ def build_fcpxml(
     video_info: dict | None = None,
     segments: list[dict] | None = None,
     caption_style: dict | None = None,
+    operations: list[dict] | None = None,
 ) -> str:
-    """FCPXML を生成する。segments を渡すと caption lane として字幕を埋め込む。
-    caption_style は Style Profile の caption_style dict。"""
+    """FCPXML を生成する。
+
+    segments はカット後タイムラインに再マッピング済みの字幕セグメント。
+    operations に Claude が生成した操作リストを渡すとリッチ出力になる:
+      speed, audio, transition, text, color
+    """
     if video_info is None:
         video_info = extract_video_info(video_path)
 
@@ -90,12 +141,22 @@ def build_fcpxml(
     if cuts is None:
         cuts = suggest_cuts(video_path, noise_db=noise_db, min_duration=min_duration)
     kept = _kept_segments(cuts, total_sec)
-    timeline_dur = sum(e - s for s, e in kept)
+
+    speed = _speed_factor(operations)
+    audio_db_val = _audio_db(operations)
+    tran_dur = _transition_dur(operations)
+    texts = _text_ops(operations)
+    color = _color_preset(operations)
+
+    # 速度・トランジションを加味したタイムライン総尺
+    n_transitions = max(0, len(kept) - 1) if tran_dur > 0 else 0
+    timeline_dur = sum((e - s) / speed for s, e in kept) + n_transitions * tran_dur
 
     asset_uid = uuid.uuid4().hex.upper()
     fmt_id = "r1"
     asset_id = "r2"
     ts_id = "ts1"
+    ts_title_id = "ts2"
 
     root = ET.Element("fcpxml", version="1.10")
 
@@ -120,12 +181,13 @@ def build_fcpxml(
         "audioChannels": "2",
         "audioRate": "44100",
     })
+    # 相対パス: Plugin 側で展開後にフルパスへ書き換える
     ET.SubElement(asset, "media-rep", {
         "kind": "original-media",
-        "src": f"file://localhost/EDITCLONE_MEDIA/{video_path.name}",
+        "src": f"./media/{video_path.name}",
     })
 
-    # 字幕スタイル定義（segments がある場合のみ追加）
+    # 字幕スタイル定義
     if segments:
         cs = caption_style or {}
         font_size = str(int(cs.get("font_size", 36)))
@@ -148,6 +210,21 @@ def build_fcpxml(
             "alignment": "center",
         })
 
+    # テキストオーバーレイ用スタイル
+    if texts:
+        ts_title_def = ET.SubElement(resources, "text-style-def", {"id": ts_title_id})
+        ET.SubElement(ts_title_def, "text-style", {
+            "font": ".AppleSystemUIFont",
+            "fontSize": "48",
+            "fontFace": "Bold",
+            "fontColor": "1 1 1 1",
+            "bold": "1",
+            "shadowColor": "0 0 0 0.75",
+            "shadowOffset": "5 315",
+            "shadowBlurRadius": "8",
+            "alignment": "center",
+        })
+
     # --- library > event > project > sequence > spine ---
     library = ET.SubElement(root, "library")
     event = ET.SubElement(library, "event", {"name": "EditClone"})
@@ -163,41 +240,110 @@ def build_fcpxml(
     })
     spine = ET.SubElement(sequence, "spine")
 
+    # カラー補正プリセット情報をメタデータとして埋め込む
+    if color:
+        note_el = ET.SubElement(spine, "note")
+        note_el.text = f"EditClone color preset: {color}"
+
+    # virtual_offset: speed 適用前のタイムライン位置 (字幕タイムスタンプと同じ座標系)
     timeline_offset = 0.0
+    virtual_offset = 0.0
+
     for i, (seg_start, seg_end) in enumerate(kept):
-        seg_dur = seg_end - seg_start
+        seg_src_dur = seg_end - seg_start
+        seg_out_dur = seg_src_dur / speed
+
         clip_el = ET.SubElement(spine, "clip", {
             "name": f"{video_path.stem}_{i + 1}",
             "ref": asset_id,
             "offset": _t(timeline_offset),
-            "duration": _t(seg_dur),
+            "duration": _t(seg_out_dur),
             "start": _t(seg_start),
         })
 
-        # 字幕 caption を clip の lane=-1 に追加
+        # 速度変更 (retime)
+        if abs(speed - 1.0) > 0.01:
+            retime_el = ET.SubElement(clip_el, "retime", {
+                "duration": _t(seg_out_dur),
+                "offset": "0s",
+                "src": "0s",
+            })
+            tm = ET.SubElement(retime_el, "timeMap")
+            ET.SubElement(tm, "timept", {
+                "time": "0s",
+                "value": "0s",
+                "interp": "smooth2",
+            })
+            ET.SubElement(tm, "timept", {
+                "time": _t(seg_out_dur),
+                "value": _t(seg_src_dur),
+                "interp": "smooth2",
+            })
+
+        # 音量調整
+        if audio_db_val is not None:
+            ET.SubElement(clip_el, "adjust-volume", {
+                "amount": f"{audio_db_val:+.1f}dB",
+            })
+
+        # 字幕 caption (lane=-1)
         if segments:
-            clip_tl_end = timeline_offset + seg_dur
+            clip_virtual_end = virtual_offset + seg_src_dur
             for sub in segments:
-                sub_s = float(sub.get("start", 0))
-                sub_e = float(sub.get("end", 0))
+                sub_vs = float(sub.get("start", 0))
+                sub_ve = float(sub.get("end", 0))
                 sub_text = str(sub.get("text", "")).strip()
                 if not sub_text:
                     continue
-                overlap_s = max(sub_s, timeline_offset)
-                overlap_e = min(sub_e, clip_tl_end)
-                if overlap_e - overlap_s < 0.05:
+                # 仮想タイムラインでオーバーラップを計算
+                ov_vs = max(sub_vs, virtual_offset)
+                ov_ve = min(sub_ve, clip_virtual_end)
+                if ov_ve - ov_vs < 0.05:
                     continue
+                # 実タイムラインへ変換 (speed 適用)
+                ov_rs = timeline_offset + (ov_vs - virtual_offset) / speed
+                ov_re = timeline_offset + (ov_ve - virtual_offset) / speed
+                cap_offset = ov_rs - timeline_offset
+                cap_dur = ov_re - ov_rs
                 cap_el = ET.SubElement(clip_el, "caption", {
                     "lane": "-1",
-                    "offset": _t(overlap_s - timeline_offset),
-                    "duration": _t(overlap_e - overlap_s),
+                    "offset": _t(cap_offset),
+                    "duration": _t(max(cap_dur, 0.05)),
                     "role": "iTT:caption.iTT-Subtitle",
                 })
                 text_el = ET.SubElement(cap_el, "text")
                 ts_el = ET.SubElement(text_el, "text-style", {"ref": ts_id})
                 ts_el.text = sub_text
 
-        timeline_offset += seg_dur
+        timeline_offset += seg_out_dur
+        virtual_offset += seg_src_dur
+
+        # クリップ間トランジション（最後以外）
+        if tran_dur > 0 and i < len(kept) - 1:
+            ET.SubElement(spine, "transition", {
+                "name": "Cross Dissolve",
+                "duration": _t(tran_dur),
+                "offset": _t(timeline_offset),
+            })
+            timeline_offset += tran_dur
+
+    # テキストオーバーレイ (lane=1, caption として)
+    for txt_op in texts:
+        txt_content = str(txt_op.get("text", "")).strip()
+        txt_start = float(txt_op.get("start", 0))
+        txt_dur = float(txt_op.get("duration", 3.0))
+        if not txt_content:
+            continue
+        cap_el = ET.SubElement(spine, "caption", {
+            "lane": "1",
+            "offset": _t(txt_start),
+            "duration": _t(txt_dur),
+            "role": "iTT:caption.iTT-Subtitle",
+        })
+        text_el = ET.SubElement(cap_el, "text")
+        ref = ts_title_id if texts else ts_id
+        ts_el = ET.SubElement(text_el, "text-style", {"ref": ref})
+        ts_el.text = txt_content
 
     # pretty-print + DOCTYPE
     raw = ET.tostring(root, encoding="unicode")

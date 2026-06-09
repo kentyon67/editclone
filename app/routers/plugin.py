@@ -36,6 +36,10 @@ class ChatEditRequest(BaseModel):
     history: list = []
 
 
+class RichFcpxmlRequest(BaseModel):
+    operations: list = []
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -133,6 +137,25 @@ def plugin_job_details(job_id: str, user: dict = Depends(require_user)):
     except Exception:
         pass
 
+    # SRT の存在確認: result 直接 or ZIP 内
+    srt_available = bool(result.get("srt"))
+    if not srt_available:
+        import io
+        import zipfile
+        zip_data = result.get("zip_bytes")
+        if not zip_data and result.get("zip_path"):
+            try:
+                from app.services.storage import download_result
+                zip_data = download_result(result["zip_path"])
+            except Exception:
+                pass
+        if zip_data:
+            try:
+                with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+                    srt_available = any(n.endswith(".srt") for n in zf.namelist())
+            except Exception:
+                pass
+
     return {
         "job_id": job.id,
         "video_name": job.video_path.stem,
@@ -147,6 +170,7 @@ def plugin_job_details(job_id: str, user: dict = Depends(require_user)):
         "cuts": cuts,
         "segments": segments[:100],
         "has_mp4": bool(result.get("mp4_bytes") or result.get("mp4_path")),
+        "srt_available": srt_available,
         "project_id": project_id,
         "chapters": result.get("chapters") or [],
     }
@@ -375,10 +399,63 @@ def plugin_chat_edit(
         history=body.history,
     )
 
+    # DaVinci Python API 非対応の操作があれば通知
+    needs_fcpxml = any(
+        op.get("type") in ("speed", "transition", "text", "color")
+        for op in operations
+    )
     return {
         "operations": operations,
         "job_id": job_id,
         "fps": fps,
         "duration": duration,
         "srt_available": bool(result.get("srt")),
+        "needs_fcpxml_import": needs_fcpxml,
     }
+
+
+@router.post("/jobs/{job_id}/rich-fcpxml")
+def plugin_rich_fcpxml(
+    job_id: str,
+    body: RichFcpxmlRequest,
+    user: dict = Depends(require_user),
+):
+    """
+    操作リストを受け取りリッチ FCPXML を生成して返す。
+    DaVinci で Python API 非対応の操作（速度・トランジション・テキスト等）を
+    FCPXML インポートで適用するために使う。
+    """
+    import io
+    import zipfile
+
+    job = get_job(job_id)
+    if not job or job.user_id != user["id"]:
+        raise HTTPException(404, "Job not found")
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    info = result.get("info") or {}
+    cuts = result.get("cuts") or []
+    transcript = result.get("transcript") or {}
+    segments_raw = transcript.get("segments", []) if isinstance(transcript, dict) else []
+
+    from app.services.fcpxml import build_fcpxml
+    from app.services.srt import remap_segments_for_cuts
+
+    total_dur = float(info.get("duration_seconds", 0))
+    fps = float(info.get("fps", 30))
+
+    remapped = remap_segments_for_cuts(segments_raw, cuts, total_dur)
+    fcpxml_content = build_fcpxml(
+        job.video_path,
+        cuts=cuts,
+        video_info=info,
+        segments=remapped,
+        operations=body.operations,
+    )
+    return Response(
+        content=fcpxml_content.encode("utf-8"),
+        media_type="text/xml; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{job_id}_rich.fcpxml"'},
+    )

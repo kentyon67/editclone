@@ -43,6 +43,41 @@ def _rate_elem(parent: ET.Element, fps: float) -> None:
     ET.SubElement(r, "ntsc").text = "TRUE" if _is_ntsc(fps) else "FALSE"
 
 
+# ---------------------------------------------------------------------------
+# Operation helpers
+# ---------------------------------------------------------------------------
+
+def _speed_percent(operations: list[dict]) -> int | None:
+    for op in (operations or []):
+        if op.get("type") == "speed":
+            return max(10, int(op.get("speed_percent", 100)))
+    return None
+
+
+def _audio_db(operations: list[dict]) -> float | None:
+    for op in (operations or []):
+        if op.get("type") == "audio":
+            db = op.get("volume_db")
+            if db is not None:
+                return float(db)
+    return None
+
+
+def _has_transition(operations: list[dict]) -> tuple[bool, float]:
+    for op in (operations or []):
+        if op.get("type") == "transition":
+            return True, max(0.1, float(op.get("duration", 0.5)))
+    return False, 0.0
+
+
+def _text_ops(operations: list[dict]) -> list[dict]:
+    return [op for op in (operations or []) if op.get("type") == "text"]
+
+
+# ---------------------------------------------------------------------------
+# Main builder
+# ---------------------------------------------------------------------------
+
 def build_premiere_xml(
     video_path: Path,
     cuts: list[dict],
@@ -51,12 +86,25 @@ def build_premiere_xml(
     width: int = 1920,
     height: int = 1080,
     segments: list[dict] | None = None,
+    operations: list[dict] | None = None,
 ) -> str:
     kept = _kept_segments(cuts, total_duration)
     total_frames = _frames(total_duration, fps)
-    timeline_total = sum(_frames(e - s, fps) for s, e in kept)
+
+    spd = _speed_percent(operations)
+    audio_db_val = _audio_db(operations)
+    has_tran, tran_sec = _has_transition(operations)
+    texts = _text_ops(operations)
+
+    # 速度が指定されていればタイムライン長を調整
+    speed_factor = (spd / 100.0) if spd else 1.0
+    timeline_total = sum(
+        int(round(_frames(e - s, fps) / speed_factor))
+        for s, e in kept
+    )
 
     file_id = f"file-{uuid.uuid4().hex[:8]}"
+    tran_frames = _frames(tran_sec, fps) if has_tran else 0
 
     xmeml = ET.Element("xmeml", version="5")
     seq = ET.SubElement(xmeml, "sequence", id=f"seq-{uuid.uuid4().hex[:8]}")
@@ -91,6 +139,8 @@ def build_premiere_xml(
 
     for i, (seg_start, seg_end) in enumerate(kept):
         seg_frames = _frames(seg_end - seg_start, fps)
+        # 速度調整後のフレーム数
+        out_frames = int(round(seg_frames / speed_factor))
         in_f = _frames(seg_start, fps)
         out_f = _frames(seg_end, fps)
         clip_id = f"clipitem-{i + 1}"
@@ -98,10 +148,10 @@ def build_premiere_xml(
         def make_clip(track: ET.Element, cid: str) -> ET.Element:
             ci = ET.SubElement(track, "clipitem", id=cid)
             ET.SubElement(ci, "name").text = f"{video_path.stem}_{i + 1}"
-            ET.SubElement(ci, "duration").text = str(seg_frames)
+            ET.SubElement(ci, "duration").text = str(out_frames)
             _rate_elem(ci, fps)
             ET.SubElement(ci, "start").text = str(timeline_pos)
-            ET.SubElement(ci, "end").text = str(timeline_pos + seg_frames)
+            ET.SubElement(ci, "end").text = str(timeline_pos + out_frames)
             ET.SubElement(ci, "in").text = str(in_f)
             ET.SubElement(ci, "out").text = str(out_f)
             return ci
@@ -111,9 +161,8 @@ def build_premiere_xml(
         if first_file:
             f_el = ET.SubElement(vci, "file", id=file_id)
             ET.SubElement(f_el, "name").text = video_path.name
-            ET.SubElement(f_el, "pathurl").text = (
-                f"file://localhost/EDITCLONE_MEDIA/{video_path.name}"
-            )
+            # 相対パス: Plugin 側で展開後にフルパスへ書き換える
+            ET.SubElement(f_el, "pathurl").text = f"./media/{video_path.name}"
             _rate_elem(f_el, fps)
             ET.SubElement(f_el, "duration").text = str(total_frames)
             tc = ET.SubElement(f_el, "timecode")
@@ -136,14 +185,51 @@ def build_premiere_xml(
         else:
             ET.SubElement(vci, "file", id=file_id)
 
-        # Audio clip (linked, reference only)
+        # 速度設定 (speed_percent 指定時)
+        if spd and spd != 100:
+            spd_el = ET.SubElement(vci, "speed")
+            _rate_elem(spd_el, fps)
+            ET.SubElement(spd_el, "percent").text = str(spd)
+            ET.SubElement(spd_el, "absolute").text = "FALSE"
+
+        # 音量フィルタ
+        if audio_db_val is not None:
+            linear_gain = round(10 ** (audio_db_val / 20.0), 4)
+            filt_el = ET.SubElement(vci, "filter")
+            eff_el = ET.SubElement(filt_el, "effect")
+            ET.SubElement(eff_el, "name").text = "Audio Levels"
+            ET.SubElement(eff_el, "effectid").text = "audiolevels"
+            ET.SubElement(eff_el, "effecttype").text = "filter"
+            ET.SubElement(eff_el, "mediatype").text = "audio"
+            param_el = ET.SubElement(eff_el, "parameter")
+            ET.SubElement(param_el, "parameterid").text = "level"
+            ET.SubElement(param_el, "name").text = "Level"
+            ET.SubElement(param_el, "value").text = str(linear_gain)
+
+        # Audio clip
         aci = make_clip(a_track, f"a{clip_id}")
         ET.SubElement(aci, "file", id=file_id)
         ET.SubElement(aci, "trackindex").text = "1"
 
-        timeline_pos += seg_frames
+        timeline_pos += out_frames
 
-    # 字幕セグメントをシーケンスマーカーとして埋め込む（Premiere の字幕参照用）
+        # クリップ間トランジション（最後以外）
+        if has_tran and tran_frames > 0 and i < len(kept) - 1:
+            tran_start = timeline_pos - tran_frames // 2
+            tran_end = tran_start + tran_frames
+            ti = ET.SubElement(v_track, "transitionitem")
+            _rate_elem(ti, fps)
+            ET.SubElement(ti, "start").text = str(tran_start)
+            ET.SubElement(ti, "end").text = str(tran_end)
+            ET.SubElement(ti, "alignment").text = "end-black"
+            eff_el = ET.SubElement(ti, "effect")
+            ET.SubElement(eff_el, "name").text = "Cross Dissolve"
+            ET.SubElement(eff_el, "effectid").text = "Cross Dissolve"
+            ET.SubElement(eff_el, "effectcategory").text = "Dissolve"
+            ET.SubElement(eff_el, "effecttype").text = "transition"
+            ET.SubElement(eff_el, "mediatype").text = "video"
+
+    # 字幕セグメントをシーケンスマーカーとして埋め込む
     if segments:
         for seg in segments:
             text = str(seg.get("text", "")).strip()
@@ -159,6 +245,19 @@ def build_premiere_xml(
             ET.SubElement(marker_el, "name").text = label
             ET.SubElement(marker_el, "in").text = str(start_f)
             ET.SubElement(marker_el, "duration").text = str(dur_f)
+
+    # テキストオーバーレイをマーカーとして埋め込む
+    for txt_op in texts:
+        txt_content = str(txt_op.get("text", "")).strip()
+        txt_start = float(txt_op.get("start", 0))
+        txt_dur = float(txt_op.get("duration", 3.0))
+        if not txt_content:
+            continue
+        marker_el = ET.SubElement(seq, "marker")
+        ET.SubElement(marker_el, "comment").text = f"[TITLE] {txt_content}"
+        ET.SubElement(marker_el, "name").text = txt_content[:28]
+        ET.SubElement(marker_el, "in").text = str(_frames(txt_start, fps))
+        ET.SubElement(marker_el, "duration").text = str(max(1, _frames(txt_dur, fps)))
 
     raw = ET.tostring(xmeml, encoding="unicode")
     pretty = minidom.parseString(raw).toprettyxml(indent="  ", encoding="UTF-8")
