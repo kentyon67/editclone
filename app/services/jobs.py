@@ -335,7 +335,34 @@ def run_job(job_id: str) -> None:
         job.progress = "無音箇所を検出中..."
         silence_cuts = suggest_cuts(path, noise_db=job.noise_db, min_duration=job.min_duration)
 
-        # プロンプトがあれば Claude API でセマンティックカット提案を追加
+        # アクティブな Style Profile から AI コンテキストを取得
+        style_context: dict | None = None
+        if job.user_id:
+            try:
+                from app.services.style_profiles import get_active_profile
+                active = get_active_profile(job.user_id)
+                if active:
+                    style_context = {
+                        "name": active.get("name", ""),
+                        "description": active.get("description", ""),
+                        "default_prompt": active.get("default_prompt", ""),
+                        "noise_db": active.get("noise_db"),
+                    }
+                    # プロファイルのデフォルトパラメータをジョブに反映（ジョブ側が明示指定していない場合）
+                    if job.noise_db == -30.0 and active.get("noise_db"):
+                        job.noise_db = float(active["noise_db"])
+                    if job.min_duration == 0.5 and active.get("min_silence_seconds"):
+                        job.min_duration = float(active["min_silence_seconds"])
+                    # プロファイルの default_prompt をベースプロンプトとして合成
+                    if active.get("default_prompt") and not job.prompt:
+                        job.prompt = active["default_prompt"]
+                    elif active.get("default_prompt") and job.prompt:
+                        job.prompt = f"{active['default_prompt']}。{job.prompt}"
+            except Exception as e:
+                logger.debug("style profile 取得に失敗: %s", e)
+
+        # プロンプト（またはスタイルプロファイルのデフォルトプロンプト）があれば
+        # Claude API でセマンティックカット提案を追加
         # raw_segments は Whisper の元セグメントで粒度が細かく、AI カットの精度が上がる
         if job.prompt:
             job.progress = "AIが編集指示を解析中..."
@@ -343,6 +370,7 @@ def run_job(job_id: str) -> None:
             ai_cuts = analyze_transcript_for_cuts(
                 ai_cut_segments, job.prompt, transcript["transcript"],
                 total_duration=total_duration,
+                style_context=style_context,
             )
             cuts = merge_cuts(silence_cuts, ai_cuts)
         else:
@@ -555,3 +583,161 @@ def run_job(job_id: str) -> None:
                 })
             except Exception:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# Web インタラクティブ編集 (refine)
+# ---------------------------------------------------------------------------
+
+def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
+    """
+    完了済みジョブに対してユーザープロンプトを再適用し、
+    更新されたカット・MP4・FCPXML・SRTを返す。
+    WebアプリのResultsページでDaVinci チャットタブ相当の体験を提供する。
+    """
+    job = get_job(job_id)
+    if not job or job.user_id != user_id:
+        raise PermissionError("ジョブが見つかりません")
+    if job.status != JobStatus.completed:
+        raise ValueError("処理が完了していないジョブは精製できません")
+
+    result = job.result or {}
+    transcript = result.get("transcript") or {}
+    info = result.get("info") or {}
+    total_duration = float(info.get("duration_seconds") or 0.0)
+    fps = float(info.get("fps") or 30.0)
+
+    # アクティブ Style Profile を取得
+    style_context: dict | None = None
+    try:
+        from app.services.style_profiles import get_active_profile
+        active = get_active_profile(user_id)
+        if active:
+            style_context = {
+                "name": active.get("name", ""),
+                "description": active.get("description", ""),
+                "default_prompt": active.get("default_prompt", ""),
+                "noise_db": active.get("noise_db"),
+            }
+    except Exception:
+        pass
+
+    # Claude でプロンプトを解析して操作リストを生成
+    from app.services.interactive_edit import parse_edit_prompt
+    current_cuts = result.get("cuts") or []
+    operations = parse_edit_prompt(
+        prompt=prompt,
+        transcript=transcript,
+        current_cuts=current_cuts,
+        duration=total_duration,
+        fps=fps,
+        history=[],
+    )
+
+    # cut 操作からセグメントを取得
+    keep_segments: list[dict] = []
+    for op in operations:
+        if op.get("type") == "cut" and op.get("keep_segments"):
+            keep_segments = op["keep_segments"]
+            break
+
+    # keep_segments → cut_start/cut_end 形式に変換（MP4レンダリング用）
+    new_cuts: list[dict] = []
+    if keep_segments:
+        new_cuts = _keep_segments_to_cuts(keep_segments, total_duration)
+    else:
+        new_cuts = current_cuts
+
+    # SRT 再生成
+    from app.services.srt import remap_segments_for_cuts, segments_to_srt
+    remapped = remap_segments_for_cuts(transcript.get("segments", []), new_cuts, total_duration)
+    new_srt = segments_to_srt(remapped)
+
+    # FCPXML 再生成（operations にリッチ操作がある場合は反映）
+    from app.services.fcpxml import build_fcpxml
+    caption_style = None
+    if style_context:
+        try:
+            from app.services.style_profiles import get_active_profile
+            active = get_active_profile(user_id)
+            caption_style = active.get("caption_style") if active else None
+        except Exception:
+            pass
+
+    video_path = job.video_path
+    if not video_path.exists():
+        try:
+            from app.services.storage import get_local_copy
+            video_path = get_local_copy(user_id, job.video_id, video_path.name, Path("uploads"))
+        except Exception:
+            pass
+
+    fcpxml = ""
+    if video_path.exists():
+        fcpxml = build_fcpxml(
+            video_path, noise_db=job.noise_db, min_duration=job.min_duration,
+            cuts=new_cuts, video_info=info, segments=remapped, caption_style=caption_style,
+        )
+
+    # MP4 再レンダリング（動画がある場合のみ）
+    mp4_bytes: bytes | None = None
+    if video_path.exists():
+        try:
+            from app.services.mp4_render import render_mp4, add_subtitles_to_mp4
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmpdir_path = Path(tmpdir)
+                cut_path = tmpdir_path / "cut.mp4"
+                if render_mp4(video_path, new_cuts, cut_path) and cut_path.exists():
+                    if new_srt.strip():
+                        sub_path = tmpdir_path / "sub.mp4"
+                        if add_subtitles_to_mp4(cut_path, new_srt, sub_path, caption_style) and sub_path.exists():
+                            mp4_bytes = sub_path.read_bytes()
+                        else:
+                            mp4_bytes = cut_path.read_bytes()
+                    else:
+                        mp4_bytes = cut_path.read_bytes()
+        except Exception as e:
+            logger.warning("refine MP4 render failed: %s", e)
+
+    # フィードバック記録（refinement = 暗黙的に編集を続けている = partial）
+    try:
+        from app.services.style_profiles import get_active_profile, record_feedback
+        active = get_active_profile(user_id)
+        if active:
+            record_feedback(
+                user_id=user_id,
+                job_id=job_id,
+                action="partial",
+                style_profile_id=active["id"],
+                notes=f"auto:web_refine:{prompt[:50]}",
+            )
+    except Exception:
+        pass
+
+    return {
+        "operations": operations,
+        "cuts": new_cuts,
+        "srt": new_srt,
+        "fcpxml": fcpxml,
+        "mp4_bytes": mp4_bytes,
+        "duration": total_duration,
+        "fps": fps,
+        "needs_fcpxml_import": any(
+            op.get("type") in ("speed", "transition", "text", "color") for op in operations
+        ),
+    }
+
+
+def _keep_segments_to_cuts(keep_segs: list[dict], total_duration: float) -> list[dict]:
+    """keep_segments (start/end) → cut_start/cut_end のカットリストに変換。"""
+    cuts: list[dict] = []
+    cursor = 0.0
+    for seg in sorted(keep_segs, key=lambda s: float(s.get("start", 0))):
+        s = float(seg.get("start", 0))
+        e = float(seg.get("end", 0))
+        if s > cursor + 0.05:
+            cuts.append({"cut_start": round(cursor, 3), "cut_end": round(s, 3), "reason": "refined", "source": "web_refine"})
+        cursor = max(cursor, e)
+    if total_duration > 0 and cursor < total_duration - 0.05:
+        cuts.append({"cut_start": round(cursor, 3), "cut_end": round(total_duration, 3), "reason": "tail", "source": "web_refine"})
+    return cuts

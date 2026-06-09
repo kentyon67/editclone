@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.middleware.auth import require_user
 from app.services.analytics import log_event
@@ -288,3 +289,77 @@ def job_broll_suggestions(job_id: str, user: dict = Depends(require_user)):
         "suggestion_count": len(suggestions),
         "suggestions": suggestions,
     }
+
+
+# ---------------------------------------------------------------------------
+# Web インタラクティブ編集
+# ---------------------------------------------------------------------------
+
+class RefineRequest(BaseModel):
+    prompt: str
+    return_mp4: bool = True  # False にするとMP4レンダリングをスキップ（高速）
+
+
+@router.post("/{job_id}/refine")
+def job_refine(job_id: str, body: RefineRequest, user: dict = Depends(require_user)):
+    """
+    完了済みジョブに対してプロンプトで追加編集し、
+    更新されたMP4・FCPXML・カットリストを返す。
+    WebアプリでDaVinciチャットタブ相当のインタラクティブ編集を提供。
+    """
+    if not body.prompt.strip():
+        raise HTTPException(400, "プロンプトを入力してください")
+
+    from app.services.jobs import refine_job
+    try:
+        result = refine_job(job_id, body.prompt, user["id"])
+    except PermissionError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    mp4_b64 = None
+    if body.return_mp4 and result.get("mp4_bytes"):
+        import base64
+        mp4_b64 = base64.b64encode(result["mp4_bytes"]).decode()
+
+    log_event("web_refine", user_id=user["id"], job_id=job_id,
+              metadata={"prompt": body.prompt[:100], "cut_count": len(result["cuts"])})
+
+    return {
+        "job_id": job_id,
+        "prompt": body.prompt,
+        "operations": result["operations"],
+        "cuts": result["cuts"],
+        "srt": result["srt"],
+        "fcpxml": result["fcpxml"],
+        "mp4_base64": mp4_b64,
+        "duration": result["duration"],
+        "fps": result["fps"],
+        "needs_fcpxml_import": result["needs_fcpxml_import"],
+    }
+
+
+@router.get("/{job_id}/refine/fcpxml")
+def job_refine_fcpxml(job_id: str, prompt: str, user: dict = Depends(require_user)):
+    """クエリパラメータのプロンプトでFCPXMLのみ即時生成（MP4なし・高速）。"""
+    from app.services.jobs import refine_job
+    try:
+        result = refine_job(job_id, prompt, user["id"])
+    except PermissionError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    if not result["fcpxml"]:
+        raise HTTPException(503, "FCPXMLの生成に失敗しました（動画ファイルが見つかりません）")
+
+    return Response(
+        content=result["fcpxml"].encode("utf-8"),
+        media_type="application/xml",
+        headers={"Content-Disposition": f'attachment; filename="refined_{job_id}.fcpxml"'},
+    )

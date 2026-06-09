@@ -54,11 +54,13 @@ def analyze_transcript_for_cuts(
     prompt: str,
     transcript: str = "",
     total_duration: float = 0.0,
+    style_context: dict | None = None,
 ) -> list[dict]:
     """
     Claude API でトランスクリプトを分析し、ユーザー指示に基づくカット候補を返す。
     segments: [{"start": float, "end": float, "text": str}, ...]
     prompt: ユーザーの編集指示（例: "冒頭の挨拶をカット"）
+    style_context: アクティブなStyle Profileの文脈 {"name", "description", "default_prompt", ...}
     返値: [{"cut_start": float, "cut_end": float, "reason": str, "source": "ai"}, ...]
     """
     if not ANTHROPIC_API_KEY:
@@ -78,6 +80,23 @@ def analyze_transcript_for_cuts(
         f"[{s['start']:.2f}s - {s['end']:.2f}s] {s['text']}" for s in segments
     )
 
+    # Style Profile コンテキストをプロンプトに組み込む
+    style_section = ""
+    if style_context:
+        parts = []
+        if style_context.get("name"):
+            parts.append(f"スタイル名: {style_context['name']}")
+        if style_context.get("description"):
+            parts.append(f"スタイル説明: {style_context['description']}")
+        if style_context.get("default_prompt"):
+            parts.append(f"ベースプロンプト: {style_context['default_prompt']}")
+        if style_context.get("noise_db"):
+            parts.append(f"無音閾値: {style_context['noise_db']}dB")
+        if parts:
+            style_section = "\n\n[USER STYLE PROFILE — prioritize these preferences]\n" + "\n".join(parts)
+
+    system_with_style = _SYSTEM_PROMPT + style_section
+
     duration_info = f"動画の総尺: {total_duration:.1f}秒\n\n" if total_duration > 0 else ""
     user_message = f"{duration_info}編集指示: {prompt}\n\nセグメント一覧:\n{segments_text}"
 
@@ -86,7 +105,7 @@ def analyze_transcript_for_cuts(
         message = client.messages.create(
             model=_MODEL,
             max_tokens=2048,
-            system=_SYSTEM_PROMPT,
+            system=system_with_style,
             messages=[{"role": "user", "content": user_message}],
         )
         raw = message.content[0].text.strip()

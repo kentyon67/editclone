@@ -550,6 +550,45 @@ export async function postPluginRevision(
 }
 
 // ---------------------------------------------------------------------------
+// Web インタラクティブ編集 (refine)
+// ---------------------------------------------------------------------------
+
+export interface RefineOperation {
+  type: string;
+  description?: string;
+  keep_segments?: Array<{ start: number; end: number }>;
+  [key: string]: unknown;
+}
+
+export interface RefineResult {
+  job_id: string;
+  prompt: string;
+  operations: RefineOperation[];
+  cuts: Array<{ cut_start: number; cut_end: number; reason: string; source: string }>;
+  srt: string;
+  fcpxml: string;
+  mp4_base64: string | null;
+  duration: number;
+  fps: number;
+  needs_fcpxml_import: boolean;
+}
+
+export async function refineJob(
+  jobId: string,
+  prompt: string,
+  returnMp4 = true,
+): Promise<RefineResult> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/jobs/${jobId}/refine`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ prompt, return_mp4: returnMp4 }),
+  });
+  if (!res.ok) return handleError(res, "Refine failed");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
 // B-roll 提案 (Phase 4)
 // ---------------------------------------------------------------------------
 

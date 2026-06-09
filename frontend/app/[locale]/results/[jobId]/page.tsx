@@ -5,11 +5,12 @@ import Link from "next/link";
 import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
-  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers, Wand2
+  Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers, Wand2,
+  MessageSquare, Send, Sparkles, RefreshCw
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, getBrollSuggestions, API_URL, JobStatusResponse, postFeedback, type Project, type BrollSuggestion } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, getBrollSuggestions, refineJob, API_URL, JobStatusResponse, postFeedback, type Project, type BrollSuggestion, type RefineResult } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -136,6 +137,13 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [pluginStatus, setPluginStatus] = useState<{ message: string; success: boolean } | null>(null);
   const [brollSuggestions, setBrollSuggestions] = useState<BrollSuggestion[] | null>(null);
   const [loadingBroll, setLoadingBroll] = useState(false);
+
+  // インタラクティブ編集チャット状態
+  type ChatMsg = { role: "user" | "assistant"; content: string; operations?: RefineResult["operations"] };
+  const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [refinedMp4Url, setRefinedMp4Url] = useState<string | null>(null);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -277,6 +285,188 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
           )}
         </div>
       )}
+
+      {/* ─── インタラクティブ編集チャット ─── */}
+      <div className="mb-6 bg-white border border-purple-100 rounded-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-purple-50 bg-gradient-to-r from-purple-50 to-white">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <p className="font-bold text-gray-900 text-sm">AI でさらに編集</p>
+            <p className="text-xs text-gray-400">プロンプトで自由に調整。動画とFCPXMLが即時更新されます。</p>
+          </div>
+        </div>
+
+        {/* クイックプリセット */}
+        <div className="px-4 py-3 flex flex-wrap gap-2 border-b border-gray-50">
+          {[
+            "フィラー（えー・あー）を除去",
+            "冒頭の挨拶をカット",
+            "テンポを1.5倍速に",
+            "Shorts向けに1分以内に",
+            "静寂を全てカット",
+            "字幕を追加",
+          ].map((preset) => (
+            <button
+              key={preset}
+              onClick={() => setChatInput(preset)}
+              className="text-xs px-2.5 py-1 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100 transition-colors"
+            >
+              {preset}
+            </button>
+          ))}
+        </div>
+
+        {/* チャット履歴 */}
+        {chatHistory.length > 0 && (
+          <div className="px-4 py-3 space-y-3 max-h-64 overflow-y-auto border-b border-gray-50">
+            {chatHistory.map((msg, i) => (
+              <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm ${
+                  msg.role === "user"
+                    ? "bg-purple-600 text-white rounded-br-sm"
+                    : "bg-gray-100 text-gray-800 rounded-bl-sm"
+                }`}>
+                  <p className="leading-relaxed">{msg.content}</p>
+                  {msg.role === "assistant" && msg.operations && msg.operations.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {msg.operations.filter(op => op.type !== "error").map((op, j) => (
+                        <div key={j} className="flex items-center gap-1.5 text-xs text-gray-500">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
+                          <span className="font-mono text-purple-600">[{op.type}]</span>
+                          <span className="truncate">{op.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex gap-2 justify-start">
+                <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-500" />
+                  <span className="text-sm text-gray-500">AIが編集中...</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 更新後プレビュー */}
+        {refinedMp4Url && (
+          <div className="px-4 py-3 border-b border-gray-50">
+            <div className="flex items-center gap-2 mb-2 text-xs text-emerald-600 font-medium">
+              <RefreshCw className="w-3.5 h-3.5" />
+              編集が適用されました
+            </div>
+            <video
+              key={refinedMp4Url}
+              src={refinedMp4Url}
+              controls
+              playsInline
+              className="w-full rounded-xl bg-black aspect-video"
+            />
+            <div className="flex gap-2 mt-2">
+              <a
+                href={refinedMp4Url}
+                download="editclone_refined.mp4"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors font-medium"
+              >
+                <Download className="w-3.5 h-3.5" />
+                MP4 を保存
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* 入力エリア */}
+        <div className="px-4 py-3 flex gap-2">
+          <input
+            type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !chatLoading && chatInput.trim()) {
+                e.preventDefault();
+                (async () => {
+                  const prompt = chatInput.trim();
+                  setChatInput("");
+                  setChatLoading(true);
+                  setChatHistory((h) => [...h, { role: "user", content: prompt }]);
+                  try {
+                    const res = await refineJob(job.job_id, prompt, true);
+                    if (res.mp4_base64) {
+                      const blob = new Blob(
+                        [Uint8Array.from(atob(res.mp4_base64), (c) => c.charCodeAt(0))],
+                        { type: "video/mp4" }
+                      );
+                      setRefinedMp4Url(URL.createObjectURL(blob));
+                    }
+                    const opSummary = res.operations
+                      .filter((o) => o.type !== "error")
+                      .map((o) => o.description || o.type)
+                      .join("、") || "操作なし";
+                    setChatHistory((h) => [
+                      ...h,
+                      { role: "assistant", content: opSummary, operations: res.operations },
+                    ]);
+                  } catch (err) {
+                    setChatHistory((h) => [
+                      ...h,
+                      { role: "assistant", content: `エラー: ${err instanceof Error ? err.message : "不明なエラー"}` },
+                    ]);
+                  } finally {
+                    setChatLoading(false);
+                  }
+                })();
+              }
+            }}
+            placeholder="例: フィラーを除去して、冒頭の挨拶もカット"
+            className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent placeholder:text-gray-400"
+            disabled={chatLoading}
+          />
+          <button
+            disabled={chatLoading || !chatInput.trim()}
+            onClick={async () => {
+              const prompt = chatInput.trim();
+              if (!prompt) return;
+              setChatInput("");
+              setChatLoading(true);
+              setChatHistory((h) => [...h, { role: "user", content: prompt }]);
+              try {
+                const res = await refineJob(job.job_id, prompt, true);
+                if (res.mp4_base64) {
+                  const blob = new Blob(
+                    [Uint8Array.from(atob(res.mp4_base64), (c) => c.charCodeAt(0))],
+                    { type: "video/mp4" }
+                  );
+                  setRefinedMp4Url(URL.createObjectURL(blob));
+                }
+                const opSummary = res.operations
+                  .filter((o) => o.type !== "error")
+                  .map((o) => o.description || o.type)
+                  .join("、") || "操作なし";
+                setChatHistory((h) => [
+                  ...h,
+                  { role: "assistant", content: opSummary, operations: res.operations },
+                ]);
+              } catch (err) {
+                setChatHistory((h) => [
+                  ...h,
+                  { role: "assistant", content: `エラー: ${err instanceof Error ? err.message : "不明なエラー"}` },
+                ]);
+              } finally {
+                setChatLoading(false);
+              }
+            }}
+            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-xl transition-colors flex items-center gap-1.5 text-sm font-medium"
+          >
+            {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
 
       {/* Secondary: Editing project ZIP */}
       <div className="mb-6 bg-white border border-purple-100 rounded-2xl p-5">
