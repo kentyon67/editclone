@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-EditClone — DaVinci Resolve AI 編集エージェント v4
+EditClone — DaVinci Resolve AI 編集エージェント v5
 =================================================
-• 🎬 AI編集  — メディアプールからクリップを選択→アップロード→AI処理→タイムライン自動生成
+• 🎬 AI編集  — ファイル選択→アップロード→AI処理→タイムライン自動生成 + リッチ編集自動提案
 • 💬 チャット — プロンプトで継続的にインタラクティブ編集（カット・速度・音量・字幕・ズーム等）
 • 🎨 スタイル — Style Profile 管理・切り替え
 • ⚙️ 設定    — API URL / Token / 診断
@@ -626,8 +626,11 @@ def run_gui():
     # 「ファイルを選択」ボタン（最も目立つ操作）
     def _open_file_dialog():
         from tkinter import filedialog
+        _dl = Path.home() / "Downloads"
+        _initial = str(_dl) if _dl.exists() else str(Path.home())
         path = filedialog.askopenfilename(
             title="編集する動画ファイルを選択",
+            initialdir=_initial,
             filetypes=[
                 ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v *.wmv *.MP4 *.MOV"),
                 ("すべてのファイル", "*.*"),
@@ -752,7 +755,7 @@ def run_gui():
     ttk.Separator(tab_edit).pack(fill="x", padx=12, pady=8)
     _mk_label(tab_edit, "② 編集指示:")
 
-    PLACEHOLDER = "例: フィラー・無音を除去してテンポよく編集、字幕も追加"
+    PLACEHOLDER = "例: フィラー・無音除去 + テンポアップ + 字幕 + カット間トランジション"
     prompt_box = tk.Text(tab_edit, height=4, bg=BG2, fg=MUTED, insertbackground=TEXT,
                          relief="flat", font=("Helvetica", 11), wrap="word",
                          borderwidth=1, highlightthickness=1,
@@ -774,20 +777,29 @@ def run_gui():
     prompt_box.bind("<FocusOut>", _pout)
 
     qf = tk.Frame(tab_edit, bg=BG)
-    qf.pack(fill="x", padx=12, pady=(0, 8))
-    for lbl, pt in [
-        ("フィラー除去", "えー・あの・まあ等フィラーと無音をすべてカット"),
-        ("テンポアップ", "沈黙・間延びを積極的カットしてテンポアップ"),
-        ("Shorts用",    "YouTube Shorts向け: フィラーなし・テンポよく・字幕付き"),
-        ("冒頭カット",  "冒頭の挨拶・タイトルコールをカット"),
-    ]:
-        tk.Button(qf, text=lbl, bg=BG3, fg=MUTED, relief="flat",
-                  font=("Helvetica", 9), cursor="hand2", padx=5, pady=2,
-                  command=lambda p=pt: (
-                      prompt_box.configure(fg=TEXT),
-                      prompt_box.delete("1.0", "end"),
-                      prompt_box.insert("1.0", p),
-                  )).pack(side="left", padx=2)
+    qf.pack(fill="x", padx=12, pady=(0, 4))
+    qf2 = tk.Frame(tab_edit, bg=BG)
+    qf2.pack(fill="x", padx=12, pady=(0, 8))
+    PRESETS = [
+        ("フィラー除去",  "えー・あの・まあ等フィラーと無音をすべてカット"),
+        ("テンポアップ",  "沈黙・間延びを積極的にカットしてテンポよく仕上げる"),
+        ("Shorts用",     "YouTube Shorts向け: フィラーなし・テンポよく60秒以内・字幕付き"),
+        ("冒頭カット",   "冒頭の挨拶・タイトルコールをカット"),
+        ("シネマ風",     "フィラー除去 + カット間クロスディゾルブ + 映画的カラーグレーディング指示 + テキストオーバーレイ"),
+        ("インタビュー", "質問部分をカット・回答のみ残す + 字幕追加 + テンポを自然に保つ"),
+        ("BGM提案",      "フィラー除去 + BGM追加提案 + 音量均一化 + 字幕付き"),
+        ("完全自動",     "フィラー除去・無音カット・テンポアップ・カット間トランジション・重要発言テキスト・字幕・音量均一化 をすべて適用"),
+    ]
+    for row_i, row_btns in enumerate([PRESETS[:4], PRESETS[4:]]):
+        container = qf if row_i == 0 else qf2
+        for lbl, pt in row_btns:
+            tk.Button(container, text=lbl, bg=BG3, fg=MUTED, relief="flat",
+                      font=("Helvetica", 9), cursor="hand2", padx=5, pady=2,
+                      command=lambda p=pt: (
+                          prompt_box.configure(fg=TEXT),
+                          prompt_box.delete("1.0", "end"),
+                          prompt_box.insert("1.0", p),
+                      )).pack(side="left", padx=2)
 
     # スタイル選択
     sr = tk.Frame(tab_edit, bg=BG)
@@ -932,12 +944,12 @@ def run_gui():
 
                 n = len(cuts)
                 has_tl = media_clip and resolve
-                _set_est(f"✓ 完了！{n} セグメント", GREEN)
+                _set_est(f"✓ 完了！{n} セグメント — リッチ編集を準備中...", GREEN)
                 root.after(0, lambda: result_lbl.configure(
                     text=(
                         f"✓ タイムライン「{tl_name}」を作成\n"
                         f"セグメント: {n}  FPS: {fps}  時間: {dur:.1f}s\n"
-                        "💬 チャットタブでさらに編集できます"
+                        "💬 チャットタブに移動中... リッチ編集オプションを準備しています"
                         if has_tl else
                         f"✓ AI編集完了（{n} セグメント）\n"
                         "DaVinci が接続されていないためタイムライン生成をスキップしました\n"
@@ -950,11 +962,82 @@ def run_gui():
                 # ジョブ履歴更新
                 threading.Thread(target=_load_jobs, daemon=True).start()
 
+                # リッチ編集オプションを自動提案（バックグラウンド）
+                if has_tl:
+                    _captured_job_id = job_id
+                    _captured_prompt = prompt
+                    def _auto_enrich():
+                        try:
+                            enrich_base = (
+                                "カット間にクロスディゾルブトランジション（0.5秒）を追加、"
+                                "重要な発言にテキストオーバーレイ（白・下部・大きめフォント）、"
+                                "音量を均一化"
+                            )
+                            enrich_prompt = (
+                                f"{_captured_prompt} + {enrich_base}"
+                                if _captured_prompt else enrich_base
+                            )
+                            _append_chat("system", "ℹ リッチ編集オプションを分析中...")
+                            resp = api_post(
+                                f"/plugin/jobs/{_captured_job_id}/team-edit",
+                                {"prompt": enrich_prompt, "history": [], "use_teams": False},
+                                timeout=60,
+                            )
+                            if _state.get("job_id") != _captured_job_id:
+                                return
+                            rich_ops = resp.get("operations") or []
+                            needs_fcpxml = resp.get("needs_fcpxml_import", False)
+                            synthesis = resp.get("synthesis") or ""
+                            if needs_fcpxml and rich_ops:
+                                _pending_ops_for_fcpxml.clear()
+                                _pending_ops_for_fcpxml.extend(rich_ops)
+                                ops_label = synthesis[:60] if synthesis else f"{len(rich_ops)} 操作"
+                                _append_chat("system",
+                                    f"✓ リッチ編集準備完了: {ops_label}\n"
+                                    "「📥 リッチ版でアップグレード」で適用できます"
+                                )
+                                root.after(0, lambda: (
+                                    btn_import_fcpxml.configure(
+                                        state="normal",
+                                        text="📥 リッチ版でアップグレード（トランジション・テキスト・音量）",
+                                    ),
+                                    btn_import_fcpxml.pack(fill="x", padx=8, pady=(0, 4),
+                                                           before=btn_send),
+                                ))
+                            else:
+                                _append_chat("system",
+                                    "ℹ 追加リッチ操作なし — チャットで指示を追加できます"
+                                )
+                        except Exception:
+                            pass
+                    threading.Thread(target=_auto_enrich, daemon=True).start()
+
             except Exception as e:
-                _set_est(f"エラー: {e}", RED)
-                root.after(0, lambda err=e: (
-                    result_lbl.configure(text=str(err), fg=RED),
-                    messagebox.showerror("エラー", str(err), parent=root),
+                err_str = str(e)
+                if "Connection refused" in err_str or "urlopen error" in err_str or "Remote end closed" in err_str:
+                    err_msg = (
+                        "バックエンドに接続できません。\n"
+                        "・設定タブで API URL を確認し「接続テスト」を実行してください\n"
+                        "・Railway バックエンドが起動していることを確認してください"
+                    )
+                elif "404" in err_str or "Application not found" in err_str:
+                    err_msg = (
+                        "バックエンドが見つかりません (404)。\n"
+                        "・設定タブで正しい Railway の URL を入力してください\n"
+                        "・例: https://editclone-production.up.railway.app"
+                    )
+                elif "401" in err_str or "403" in err_str or "Unauthorized" in err_str:
+                    err_msg = (
+                        "認証エラーです。\n"
+                        "・設定タブで API Token を確認してください\n"
+                        "・Web ダッシュボード → アカウント → API Keys で取得"
+                    )
+                else:
+                    err_msg = err_str
+                _set_est(f"エラー: {err_msg[:60]}", RED)
+                root.after(0, lambda msg=err_msg: (
+                    result_lbl.configure(text=msg, fg=RED),
+                    messagebox.showerror("エラー", msg, parent=root),
                 ))
             finally:
                 root.after(0, lambda: (
@@ -1193,8 +1276,11 @@ def run_gui():
 
                     def _ask_file():
                         import tkinter.filedialog as fd
+                        _dl2 = Path.home() / "Downloads"
+                        _init2 = str(_dl2) if _dl2.exists() else str(Path.home())
                         chosen = fd.askopenfilename(
                             title="元の動画ファイルを選択してください",
+                            initialdir=_init2,
                             filetypes=[
                                 ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v"),
                                 ("すべてのファイル", "*.*"),
@@ -1510,15 +1596,31 @@ def run_gui():
 
     def _test_conn():
         url = url_var.get().strip().rstrip("/")
-        set_status.configure(text="接続テスト中...", fg=MUTED)
+        set_status.configure(text="接続テスト中 (最大15秒)...", fg=MUTED)
         def _run():
             try:
                 req = urllib.request.Request(f"{url}/health")
-                with urllib.request.urlopen(req, timeout=5) as r:
+                with urllib.request.urlopen(req, timeout=15) as r:
                     ver = json.loads(r.read()).get("version", "?")
                 set_status.configure(text=f"✓ 接続成功 (v{ver})", fg=GREEN)
+            except urllib.error.HTTPError as e:
+                code = e.code
+                if code == 404:
+                    set_status.configure(
+                        text=f"✗ 404: URL が正しくない可能性があります。Railway ダッシュボードで URL を確認してください",
+                        fg=RED,
+                    )
+                else:
+                    set_status.configure(text=f"✗ HTTP {code}", fg=RED)
             except Exception as e:
-                set_status.configure(text=f"接続失敗: {e}", fg=RED)
+                msg = str(e)
+                if "timed out" in msg or "timeout" in msg:
+                    set_status.configure(
+                        text="✗ タイムアウト — Railway がスリープ中かもしれません。30秒後に再試行してください",
+                        fg=YELLOW,
+                    )
+                else:
+                    set_status.configure(text=f"✗ 接続失敗: {msg[:80]}", fg=RED)
         threading.Thread(target=_run, daemon=True).start()
 
     def _show_diag():
