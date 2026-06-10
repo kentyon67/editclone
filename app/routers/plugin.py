@@ -81,24 +81,23 @@ def plugin_list_jobs(user: dict = Depends(require_user)):
     all_jobs = list_user_jobs(user["id"])
     completed = [j for j in all_jobs if j.status == JobStatus.completed]
     completed.sort(key=lambda j: j.created_at, reverse=True)
-    return {
-        "jobs": [
-            {
-                "job_id": j.id,
-                "video_id": j.video_id,
-                "video_name": j.video_path.stem,
-                "filename": j.video_path.name,
-                "created_at": j.created_at,
-                "has_mp4": bool(
-                    (j.result.get("mp4_bytes") or j.result.get("mp4_path"))
-                    if j.result else False
-                ),
-                "cut_count": len((j.result or {}).get("cuts") or []),
-                "prompt": j.prompt or "",
-            }
-            for j in completed[:20]
-        ]
-    }
+    jobs_out = []
+    for j in completed[:20]:
+        result = j.result or {}
+        info = result.get("info") or {}
+        jobs_out.append({
+            "job_id": j.id,
+            "video_id": j.video_id,
+            "video_name": j.video_path.stem,
+            "filename": j.video_path.name,
+            "created_at": j.created_at,
+            "has_mp4": bool(result.get("mp4_bytes") or result.get("mp4_path")),
+            "cut_count": len(result.get("cuts") or []),
+            "prompt": j.prompt or "",
+            "duration": float(info.get("duration_seconds", 0)),
+            "fps": float(info.get("fps", 30)),
+        })
+    return {"jobs": jobs_out}
 
 
 @router.get("/jobs/{job_id}/poll")

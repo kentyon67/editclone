@@ -994,7 +994,8 @@ def run_gui():
         if idx <= 0 or idx - 1 >= len(jobs_data):
             return
         j = jobs_data[idx - 1]
-        st_set("job_id",        j["job_id"])
+        job_id = j["job_id"]
+        st_set("job_id",        job_id)
         st_set("project_id",    j.get("project_id", ""))
         st_set("fps",           float(j.get("fps", 30)))
         st_set("duration",      float(j.get("duration", 0)))
@@ -1009,6 +1010,23 @@ def run_gui():
         dur  = float(j.get("duration", 0))
         fps  = float(j.get("fps", 30))
         _append_chat("system", f"ℹ ジョブ「{name}」を選択しました ({dur:.1f}秒 / {fps:.2f}fps)\n指示を入力してください。")
+
+        # バックグラウンドで詳細を取得（srt_available・cuts・project_id を正確にセット）
+        def _fetch_details():
+            try:
+                det = api_get(f"/plugin/jobs/{job_id}/details")
+                if _state.get("job_id") != job_id:
+                    return  # 別のジョブに切り替わっていたら無視
+                st_set("cuts",          det.get("cuts") or [])
+                st_set("fps",           float(det.get("fps") or fps))
+                st_set("duration",      float(det.get("duration") or dur))
+                st_set("srt_available", bool(det.get("srt_available")))
+                st_set("project_id",    det.get("project_id") or "")
+                srt_ok = bool(det.get("srt_available"))
+                _append_chat("system", f"ℹ 詳細読み込み完了 — 字幕: {'あり' if srt_ok else 'なし'}")
+            except Exception:
+                pass
+        threading.Thread(target=_fetch_details, daemon=True).start()
 
     job_sel_cb.bind("<<ComboboxSelected>>", _on_job_sel)
 
@@ -1116,8 +1134,9 @@ def run_gui():
         _append_chat("system", "ℹ FCPXML を生成・インポート中...")
 
         def _run():
+            import shutil
             try:
-                # rich FCPXML を取得
+                # rich FCPXML をバックエンドから取得
                 req = urllib.request.Request(
                     f"{_API_URL}/plugin/jobs/{job_id}/rich-fcpxml",
                     data=json.dumps({"operations": ops}).encode(),
@@ -1128,29 +1147,77 @@ def run_gui():
                 with urllib.request.urlopen(req, timeout=60) as r:
                     fcpxml_bytes = r.read()
 
-                # ローカルに保存
+                # 保存先ディレクトリを準備
                 videos_dir = "Videos" if sys.platform == "win32" else "Movies"
                 out_dir = Path.home() / videos_dir / "EditClone" / job_id
                 out_dir.mkdir(parents=True, exist_ok=True)
-                fcpxml_path = out_dir / "rich_edit.fcpxml"
+                media_dir = out_dir / "media"
+                media_dir.mkdir(parents=True, exist_ok=True)
 
-                # ソースクリップを media/ サブディレクトリにコピー → FCPXML メディアパスを解決
+                # ソースファイルパスを特定する（3段階フォールバック）
+                src_file = ""
+
+                # 1. state の source_clip（AI編集タブ経由）
                 source_clip = _state.get("source_clip")
                 if source_clip:
                     try:
                         props = source_clip.GetClipProperty() or {}
-                        src_file = props.get("File Path", "")
-                        if src_file and Path(src_file).exists():
-                            media_dir = out_dir / "media"
-                            media_dir.mkdir(parents=True, exist_ok=True)
-                            import shutil
-                            dest = media_dir / Path(src_file).name
-                            if not dest.exists():
-                                shutil.copy2(src_file, dest)
+                        fp = props.get("File Path", "")
+                        if fp and Path(fp).exists():
+                            src_file = fp
                     except Exception:
                         pass
 
-                fcpxml_path.write_bytes(fcpxml_bytes)
+                # 2. DaVinci メディアプールで動画名を照合
+                if not src_file and resolve:
+                    try:
+                        det = api_get(f"/plugin/jobs/{job_id}/details")
+                        filename = det.get("filename", "")
+                        for c in get_media_pool_clips(resolve):
+                            try:
+                                fp = (c.GetClipProperty() or {}).get("File Path", "")
+                                if fp and Path(fp).name == filename and Path(fp).exists():
+                                    src_file = fp
+                                    _state["source_clip"] = c
+                                    break
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                # 3. ファイルダイアログで手動選択
+                if not src_file:
+                    _append_chat("system", "ℹ 元動画ファイルを選択してください...")
+                    import tkinter.filedialog as fd
+                    chosen = fd.askopenfilename(
+                        title="元の動画ファイルを選択してください",
+                        filetypes=[
+                            ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v"),
+                            ("すべてのファイル", "*.*"),
+                        ],
+                        parent=root,
+                    )
+                    if chosen:
+                        src_file = chosen
+
+                # メディアを media/ にコピーし、FCPXML パスを絶対 file:// URL に書き換える
+                fcpxml_str = fcpxml_bytes.decode("utf-8")
+
+                if src_file and Path(src_file).exists():
+                    dest = media_dir / Path(src_file).name
+                    if not dest.exists():
+                        shutil.copy2(src_file, dest)
+                        _append_chat("system", f"ℹ メディアをコピーしました: {Path(src_file).name}")
+                    # ./media/xxx → file:///abs/path/media/xxx
+                    media_dir_uri = media_dir.as_uri() + "/"
+                    fcpxml_str = fcpxml_str.replace('"./media/', f'"{media_dir_uri}')
+                    _append_chat("system", f"ℹ メディアパスを解決しました")
+                else:
+                    _append_chat("system", "⚠ 元動画が未選択 — タイムライン構造のみインポートします（メディアはオフライン状態）")
+
+                # 書き換え済み FCPXML を保存
+                fcpxml_path = out_dir / "rich_edit.fcpxml"
+                fcpxml_path.write_text(fcpxml_str, encoding="utf-8")
 
                 # DaVinci に FCPXML をインポート
                 if resolve:
@@ -1160,22 +1227,23 @@ def run_gui():
                         tl = media_pool.ImportTimelineFromFile(str(fcpxml_path))
                         if tl:
                             project.SetCurrentTimeline(tl)
-                            _append_chat("system", f"✓ FCPXML をインポートしました: {tl.GetName()}")
+                            _append_chat("system", f"✓ FCPXMLインポート完了: 「{tl.GetName()}」")
                         else:
                             _append_chat("system",
-                                f"⚠ FCPXML 保存済み: {fcpxml_path}\n"
-                                "DaVinci でファイル → タイムラインをインポート → ファイルを選択")
+                                f"⚠ 自動インポート失敗 — 手動でインポートしてください:\n{fcpxml_path}\n"
+                                "DaVinci: ファイル → タイムラインをインポート")
                     except Exception as e:
                         _append_chat("system",
-                            f"⚠ 自動インポート失敗: {e}\n"
-                            f"手動でインポート: {fcpxml_path}")
+                            f"⚠ DaVinci API エラー: {e}\n"
+                            f"手動インポート先: {fcpxml_path}")
                 else:
-                    _append_chat("system", f"ℹ FCPXML 保存: {fcpxml_path}")
+                    _append_chat("system", f"ℹ FCPXML 保存完了: {fcpxml_path}")
+
             except Exception as e:
-                _append_chat("system", f"✗ FCPXML エラー: {e}")
+                _append_chat("system", f"✗ FCPXMLエラー: {e}")
             finally:
                 root.after(0, lambda: btn_import_fcpxml.configure(
-                    state="disabled", text="📥 FCPXML インポート済み"
+                    state="disabled", text="📥 FCPXMLインポート済み"
                 ))
 
         threading.Thread(target=_run, daemon=True).start()
@@ -1485,10 +1553,13 @@ def run_gui():
     def _update_job_selector():
         if not jobs_data:
             return
-        vals = ["─ ジョブを選択 ─"] + [
-            f"{j['video_name']}  ({(j.get('created_at') or '')[:10]})"
-            for j in jobs_data
-        ]
+        def _fmt(j):
+            name = j.get("video_name", "不明")
+            date = (j.get("created_at") or "")[:10]
+            dur  = float(j.get("duration", 0))
+            dur_str = f"{int(dur//60)}:{int(dur%60):02d}" if dur > 0 else "?"
+            return f"{name}  [{dur_str}]  {date}"
+        vals = ["─ ジョブを選択 ─"] + [_fmt(j) for j in jobs_data]
         job_sel_cb["values"] = vals
         # 現在の job_id を選択
         cur = _state.get("job_id", "")
