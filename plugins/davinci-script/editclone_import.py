@@ -598,7 +598,8 @@ def run_gui():
         "duration": 0.0,
         "cuts": [],
         "srt_available": False,
-        "source_clip": None,   # DaVinci media pool item
+        "source_clip": None,        # DaVinci media pool item
+        "direct_file_path": "",     # ファイルピッカーで直接選択したパス
     }
     styles_data: list = []
     jobs_data: list = []
@@ -619,9 +620,76 @@ def run_gui():
         tk.Label(parent, text=text, bg=BG, fg=MUTED,
                  font=("Helvetica", 10)).pack(anchor="w", padx=12, pady=pady)
 
-    _mk_label(tab_edit, "① DaVinci のクリップを選択:", pady=(12, 2))
+    # ── ファイル選択行 ─────────────────────────────────────────
+    _mk_label(tab_edit, "① 編集する動画を選択:", pady=(12, 2))
+
+    # 「ファイルを選択」ボタン（最も目立つ操作）
+    def _open_file_dialog():
+        from tkinter import filedialog
+        path = filedialog.askopenfilename(
+            title="編集する動画ファイルを選択",
+            filetypes=[
+                ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v *.wmv *.MP4 *.MOV"),
+                ("すべてのファイル", "*.*"),
+            ],
+            parent=root,
+        )
+        if not path:
+            return
+        # DaVinci が接続済みならメディアプールにインポートを試みる
+        if resolve:
+            try:
+                project = resolve.GetProjectManager().GetCurrentProject()
+                if project:
+                    mp = project.GetMediaPool()
+                    imported = mp.ImportMedia([path])
+                    if imported:
+                        _reload_clips()
+                        # インポートしたクリップを自動選択
+                        for i, c in enumerate(_clips):
+                            try:
+                                fp = (c.GetClipProperty() or {}).get("File Path", "")
+                                if Path(fp).resolve() == Path(path).resolve():
+                                    clip_cb.current(i)
+                                    _show_clip_info()
+                                    break
+                            except Exception:
+                                pass
+                        else:
+                            # 末尾のクリップを選択（インポート直後）
+                            if _clips:
+                                clip_cb.current(len(_clips) - 1)
+                                _show_clip_info()
+                        clip_info_lbl.configure(
+                            text=f"✓ DaVinci メディアプールにインポートしました",
+                            fg=GREEN,
+                        )
+                        return
+            except Exception:
+                pass
+        # DaVinci 未接続またはインポート失敗 → 直接パスをセット
+        _state["direct_file_path"] = path
+        fname = Path(path).name
+        existing = list(clip_cb["values"])
+        if existing == ["クリップなし"] or existing == ["DaVinci 未接続"] or existing == [""]:
+            existing = []
+        existing.append(fname)
+        clip_cb["values"] = existing
+        clip_cb.current(len(existing) - 1)
+        clip_info_lbl.configure(
+            text=f"📂 {fname}  （ファイルから直接読み込み）",
+            fg=MUTED,
+        )
+
+    btn_file = ttk.Button(tab_edit, text="📂 ファイルを選択...",
+                          command=_open_file_dialog)
+    btn_file.pack(fill="x", padx=12, pady=(0, 6))
+
+    # メディアプールからの選択（サブ操作）
     clip_row = tk.Frame(tab_edit, bg=BG)
     clip_row.pack(fill="x", padx=12, pady=(0, 2))
+    tk.Label(clip_row, text="または メディアプールから:", bg=BG, fg=MUTED,
+             font=("Helvetica", 9)).pack(side="left", padx=(0, 6))
     clip_var = tk.StringVar()
     clip_cb  = ttk.Combobox(clip_row, textvariable=clip_var, state="readonly",
                              font=("Helvetica", 10))
@@ -643,15 +711,24 @@ def run_gui():
                 names.append(f"{nm}  [{du}]" if du else nm)
             except Exception:
                 names.append("(取得失敗)")
-        clip_cb["values"] = names or (["クリップなし"] if resolve else ["DaVinci 未接続"])
         if names:
+            clip_cb["values"] = names
             clip_cb.current(0)
             _show_clip_info()
+        elif resolve:
+            clip_cb["values"] = ["（メディアプールにクリップなし）"]
+            clip_cb.current(0)
+            clip_info_lbl.configure(
+                text="↑「ファイルを選択...」ボタンで動画を直接選択できます",
+                fg=YELLOW,
+            )
+        else:
+            clip_cb["values"] = ["（DaVinci 未接続）"]
+            clip_cb.current(0)
 
     def _show_clip_info(*_):
         idx = clip_cb.current()
         if idx < 0 or idx >= len(_clips):
-            clip_info_lbl.configure(text="")
             return
         try:
             p    = _clips[idx].GetClipProperty() or {}
@@ -664,6 +741,7 @@ def run_gui():
                      (f"  |  {sz}" if sz else ""),
                 fg=MUTED,
             )
+            _state["direct_file_path"] = ""  # メディアプール選択時はリセット
         except Exception:
             clip_info_lbl.configure(text="")
 
@@ -721,7 +799,7 @@ def run_gui():
     style_combo.current(0)
     style_combo.pack(side="left")
 
-    edit_status = tk.Label(tab_edit, text="クリップを選択して「AIで編集」をクリック",
+    edit_status = tk.Label(tab_edit, text="↑ 動画ファイルを選択して「AIで編集」をクリック",
                            bg=BG, fg=MUTED, font=("Helvetica", 9), wraplength=460)
     edit_status.pack(fill="x", padx=12, pady=(0, 4))
     edit_progress = ttk.Progressbar(tab_edit, mode="indeterminate")
@@ -737,34 +815,31 @@ def run_gui():
         edit_status.update_idletasks()
 
     def _run_ai_edit():
-        idx = clip_cb.current()
-        if not resolve:
-            messagebox.showerror("エラー", "DaVinci Resolve に接続できません", parent=root)
-            return
-        if idx < 0 or idx >= len(_clips):
-            messagebox.showwarning("未選択", "クリップを選択してください", parent=root)
-            return
         if not _API_URL or not _API_TOKEN:
             messagebox.showwarning("設定不足", "設定タブで API URL と Token を入力してください",
                                    parent=root)
             nb.select(tab_settings)
             return
 
-        prompt = prompt_box.get("1.0", "end").strip()
-        if prompt == PLACEHOLDER:
-            prompt = ""
+        # ファイルパスの決定: ファイルピッカー優先 → メディアプールクリップ
+        file_path   = _state.get("direct_file_path", "")
+        media_clip  = None
 
-        s_idx     = style_combo.current()
-        prof_id   = ""
-        if s_idx > 0 and s_idx - 1 < len(styles_data):
-            prof_id = styles_data[s_idx - 1].get("id", "")
-
-        media_clip = _clips[idx]
-        try:
-            props     = media_clip.GetClipProperty() or {}
-            file_path = props.get("File Path", "")
-        except Exception:
-            file_path = ""
+        if not file_path:
+            idx = clip_cb.current()
+            if idx < 0 or idx >= len(_clips):
+                messagebox.showwarning(
+                    "動画未選択",
+                    "「📂 ファイルを選択...」ボタンで動画ファイルを選んでください",
+                    parent=root,
+                )
+                return
+            media_clip = _clips[idx]
+            try:
+                props     = media_clip.GetClipProperty() or {}
+                file_path = props.get("File Path", "")
+            except Exception:
+                file_path = ""
 
         if not file_path or not Path(file_path).exists():
             messagebox.showerror("ファイルエラー",
@@ -807,35 +882,59 @@ def run_gui():
                 project_id = details.get("project_id") or ""
 
                 _set_est("DaVinci タイムラインを生成中...")
-                try:
-                    clip_name = (media_clip.GetClipProperty() or {}).get("Clip Name", "clip")
-                except Exception:
-                    clip_name = "clip"
-                tl_name = f"EditClone_{clip_name[:18]}"
-                _, result = apply_cuts_to_timeline(resolve, media_clip, cuts, fps, tl_name,
-                                                   total_duration=dur)
+                # media_clip が None の場合（ファイル直接選択）はメディアプールにインポート
+                if media_clip is None and resolve:
+                    try:
+                        project = resolve.GetProjectManager().GetCurrentProject()
+                        if project:
+                            imported = project.GetMediaPool().ImportMedia([file_path])
+                            if imported:
+                                media_clip = imported[0]
+                    except Exception:
+                        pass
 
-                if result != "ok":
-                    raise RuntimeError(f"タイムライン生成失敗: {result}")
+                clip_name = Path(file_path).stem if not media_clip else ""
+                if media_clip:
+                    try:
+                        clip_name = (media_clip.GetClipProperty() or {}).get("Clip Name", "") or Path(file_path).stem
+                    except Exception:
+                        clip_name = Path(file_path).stem
+                tl_name = f"EditClone_{clip_name[:18]}"
+
+                if media_clip and resolve:
+                    _, result = apply_cuts_to_timeline(resolve, media_clip, cuts, fps, tl_name,
+                                                       total_duration=dur)
+                    if result != "ok":
+                        raise RuntimeError(f"タイムライン生成失敗: {result}")
+                else:
+                    result = "ok (タイムライン生成スキップ: DaVinci未接続)"
 
                 # 状態更新
-                st_set("job_id",        job_id)
-                st_set("project_id",    project_id)
-                st_set("fps",           fps)
-                st_set("duration",      dur)
-                st_set("cuts",          cuts)
-                st_set("srt_available", srt_ok)
-                st_set("source_clip",   media_clip)
+                st_set("job_id",             job_id)
+                st_set("project_id",         project_id)
+                st_set("fps",                fps)
+                st_set("duration",           dur)
+                st_set("cuts",               cuts)
+                st_set("srt_available",      srt_ok)
+                st_set("source_clip",        media_clip)
+                st_set("direct_file_path",   "")  # リセット
 
                 # 会話履歴をリセット
                 _chat_history.clear()
 
                 n = len(cuts)
-                _set_est(f"✓ 完了！{n} セグメントでタイムライン生成", GREEN)
+                has_tl = media_clip and resolve
+                _set_est(f"✓ 完了！{n} セグメント", GREEN)
                 root.after(0, lambda: result_lbl.configure(
-                    text=f"✓ タイムライン「{tl_name}」を作成\n"
-                         f"セグメント: {n}  FPS: {fps}  時間: {dur:.1f}s\n"
-                         "💬 チャットタブでさらに編集できます",
+                    text=(
+                        f"✓ タイムライン「{tl_name}」を作成\n"
+                        f"セグメント: {n}  FPS: {fps}  時間: {dur:.1f}s\n"
+                        "💬 チャットタブでさらに編集できます"
+                        if has_tl else
+                        f"✓ AI編集完了（{n} セグメント）\n"
+                        "DaVinci が接続されていないためタイムライン生成をスキップしました\n"
+                        "設定タブで接続後、チャットタブから操作できます"
+                    ),
                     fg=GREEN,
                 ))
                 root.after(0, lambda: nb.select(tab_chat))
