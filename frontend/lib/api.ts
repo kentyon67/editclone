@@ -24,6 +24,26 @@ async function authHeaders(): Promise<Record<string, string>> {
   }
 }
 
+async function fetchWithAuthRetry(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, init);
+  if (res.status !== 401) return res;
+  try {
+    const { createClient } = await import("./supabase");
+    const supabase = createClient();
+    const { error } = await supabase.auth.refreshSession();
+    if (error) throw error;
+    const refreshed = await authHeaders();
+    const headers = { ...(init.headers as Record<string, string> || {}), ...refreshed };
+    return fetch(url, { ...init, headers });
+  } catch {
+    if (typeof window !== "undefined") {
+      const locale = document.documentElement.lang || "ja";
+      window.location.href = `/${locale}/login`;
+    }
+    return res;
+  }
+}
+
 async function handleError(res: Response, fallback: string): Promise<never> {
   const body = await res.json().catch(() => ({}));
   const detail = body.detail;
@@ -76,7 +96,7 @@ export function getFcpxmlUrl(jobId: string): string {
 
 export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
   const headers = await authHeaders();
-  const res = await fetch(`${API_URL}/jobs/${jobId}`, { headers });
+  const res = await fetchWithAuthRetry(`${API_URL}/jobs/${jobId}`, { headers });
   if (!res.ok) return handleError(res, "Job fetch failed");
   return res.json();
 }
@@ -91,7 +111,7 @@ export function getMp4Url(jobId: string): string {
 
 export async function getUserJobs(): Promise<{ jobs: UserJob[] }> {
   const headers = await authHeaders();
-  const res = await fetch(`${API_URL}/jobs`, { headers });
+  const res = await fetchWithAuthRetry(`${API_URL}/jobs`, { headers });
   if (!res.ok) return handleError(res, "Jobs fetch failed");
   return res.json();
 }

@@ -247,11 +247,10 @@ def plugin_style_profiles(user: dict = Depends(require_user)):
 def plugin_activate_profile(profile_id: str, user: dict = Depends(require_user)):
     """スタイルプロファイルをアクティブに設定し、他を非アクティブにする。"""
     from app.services import style_profiles as sp
-    profiles = sp.list_profiles(user["id"])
-    for p in profiles:
-        if p["id"] != profile_id and p.get("is_active"):
-            sp.update_profile(p["id"], user["id"], {"is_active": False})
-    updated = sp.update_profile(profile_id, user["id"], {"is_active": True})
+    ok = sp.set_active_profile(profile_id, user["id"])
+    if not ok:
+        raise HTTPException(404, "プロファイルが見つかりません")
+    updated = sp.get_profile(profile_id, user["id"])
     if updated is None:
         raise HTTPException(404, "プロファイルが見つかりません")
     return updated

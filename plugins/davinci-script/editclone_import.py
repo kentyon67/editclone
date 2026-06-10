@@ -994,11 +994,21 @@ def run_gui():
         if idx <= 0 or idx - 1 >= len(jobs_data):
             return
         j = jobs_data[idx - 1]
-        st_set("job_id",  j["job_id"])
-        st_set("fps",     float(j.get("fps", 30)))
-        st_set("cuts",    [])
+        st_set("job_id",        j["job_id"])
+        st_set("project_id",    j.get("project_id", ""))
+        st_set("fps",           float(j.get("fps", 30)))
+        st_set("duration",      float(j.get("duration", 0)))
+        st_set("cuts",          [])
+        st_set("srt_available", False)
+        st_set("source_clip",   None)
+        st_set("direct_file_path", "")
         _chat_history.clear()
-        _append_chat("system", f"ジョブ「{j['video_name']}」を選択しました。\n指示を入力してください。")
+        _pending_ops_for_fcpxml.clear()
+        root.after(0, lambda: btn_import_fcpxml.pack_forget())
+        name = j.get("video_name") or j.get("filename", "不明")
+        dur  = float(j.get("duration", 0))
+        fps  = float(j.get("fps", 30))
+        _append_chat("system", f"ℹ ジョブ「{name}」を選択しました ({dur:.1f}秒 / {fps:.2f}fps)\n指示を入力してください。")
 
     job_sel_cb.bind("<<ComboboxSelected>>", _on_job_sel)
 

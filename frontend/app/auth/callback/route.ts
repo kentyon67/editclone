@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/ja/dashboard";
+
+  const acceptLang = request.headers.get("accept-language") ?? "";
+  const defaultLocale = acceptLang.toLowerCase().includes("ja") ? "ja" : "en";
+  const next = searchParams.get("next") ?? `/${defaultLocale}/dashboard`;
 
   if (code) {
     const cookieStore = await cookies();
@@ -30,5 +33,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/ja/login?error=confirmation_failed`);
+  return NextResponse.redirect(`${origin}/${defaultLocale}/login?error=confirmation_failed`);
 }

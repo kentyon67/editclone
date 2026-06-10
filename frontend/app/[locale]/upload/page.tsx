@@ -77,6 +77,7 @@ export default function UploadPage() {
         noise_db: noiseDb,
         min_duration: minDuration,
         prompt: prompt.trim() || undefined,
+        style_profile_id: activeProfile?.id || undefined,
       });
 
       router.push(`/${locale}/results/${job.job_id}`);

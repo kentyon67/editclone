@@ -36,6 +36,42 @@ function getProgressStepIndex(progress: string): number {
   return 0;
 }
 
+function FailedView({ error, jobId }: { error?: string; jobId: string }) {
+  const locale = useLocale();
+  const [showDetail, setShowDetail] = useState(false);
+  const isTraceback = error?.includes("\n") || error?.includes("Traceback") || error?.includes("Error:");
+
+  return (
+    <div className="text-center py-16">
+      <XCircle className="w-16 h-16 mx-auto mb-4 text-red-400" />
+      <h2 className="text-xl font-bold text-gray-900 mb-2">処理中にエラーが発生しました</h2>
+      <p className="text-gray-500 mb-6">動画の処理に失敗しました。しばらくしてから再試行してください。</p>
+      {error && (
+        <div className="max-w-sm mx-auto mb-6">
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            className="text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            {showDetail ? "詳細を隠す" : "エラー詳細を見る"}
+          </button>
+          {showDetail && (
+            <pre className="mt-2 text-left text-xs bg-gray-50 border border-gray-200 rounded-xl p-3 overflow-auto max-h-40 text-gray-600 whitespace-pre-wrap">
+              {isTraceback ? error.split("\n").slice(-5).join("\n") : error}
+            </pre>
+          )}
+        </div>
+      )}
+      <Link
+        href={`/${locale}/upload`}
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-medium rounded-xl hover:bg-purple-700 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        もう一度試す
+      </Link>
+    </div>
+  );
+}
+
 function ProcessingView({ progress, progressPercent }: { progress: string; progressPercent?: number }) {
   const t = useTranslations("processing");
   const steps = ["uploading", "transcribing", "detecting", "generating", "packaging"] as const;
@@ -715,12 +751,19 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 180; // 6分 (2秒×180)
 
     async function poll() {
       try {
         const data = await getJobStatus(jobId);
         setJob(data);
         if (data.status === "pending" || data.status === "processing") {
+          attempts++;
+          if (attempts >= MAX_ATTEMPTS) {
+            setFatalError("処理がタイムアウトしました。ページを再読み込みしてください。");
+            return;
+          }
           timer = setTimeout(poll, 2000);
         }
       } catch {
@@ -730,7 +773,7 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
 
     poll();
     return () => clearTimeout(timer);
-  }, [jobId]);
+  }, [jobId, t]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -748,10 +791,7 @@ export default function ResultsPage({ params }: { params: Promise<{ jobId: strin
           </div>
         )}
         {job?.status === "failed" && (
-          <div className="text-center py-16">
-            <XCircle className="w-16 h-16 mx-auto mb-4 text-red-400" />
-            <p className="text-red-600 font-medium">{job.error}</p>
-          </div>
+          <FailedView error={job.error ?? undefined} jobId={job.job_id} />
         )}
         {(job?.status === "pending" || job?.status === "processing") && (
           <ProcessingView progress={job.progress || ""} progressPercent={job.progress_percent} />

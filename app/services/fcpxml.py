@@ -320,8 +320,18 @@ def build_fcpxml(
 
         # クリップ間トランジション（最後以外）
         if tran_dur > 0 and i < len(kept) - 1:
+            tran_op = next(
+                (op for op in (operations or []) if op.get("type") == "transition"), {}
+            )
+            tran_style = str(tran_op.get("style", "dissolve"))
+            tran_name_map = {
+                "dissolve": "Cross Dissolve",
+                "fade_to_black": "Fade To Black",
+                "wipe": "Wipe",
+            }
+            tran_name = tran_name_map.get(tran_style, "Cross Dissolve")
             ET.SubElement(spine, "transition", {
-                "name": "Cross Dissolve",
+                "name": tran_name,
                 "duration": _t(tran_dur),
                 "offset": _t(timeline_offset),
             })
@@ -341,8 +351,7 @@ def build_fcpxml(
             "role": "iTT:caption.iTT-Subtitle",
         })
         text_el = ET.SubElement(cap_el, "text")
-        ref = ts_title_id if texts else ts_id
-        ts_el = ET.SubElement(text_el, "text-style", {"ref": ref})
+        ts_el = ET.SubElement(text_el, "text-style", {"ref": ts_title_id})
         ts_el.text = txt_content
 
     # pretty-print + DOCTYPE
