@@ -18,7 +18,8 @@ from app.services.jobs import JobStatus, create_job, get_job, list_user_jobs, ru
 router = APIRouter(prefix="/plugin", tags=["plugin"])
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+# plugin auth uses anon key (not service role) — sign_in_with_password never needs elevated privileges
+SUPABASE_KEY = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 
 class TokenRequest(BaseModel):

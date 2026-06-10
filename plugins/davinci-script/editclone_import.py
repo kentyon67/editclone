@@ -643,7 +643,7 @@ def run_gui():
                 if project:
                     mp = project.GetMediaPool()
                     imported = mp.ImportMedia([path])
-                    if imported:
+                    if imported:  # 空リストや None は失敗とみなしフォールスルー
                         _reload_clips()
                         # インポートしたクリップを自動選択
                         for i, c in enumerate(_clips):
@@ -656,15 +656,16 @@ def run_gui():
                             except Exception:
                                 pass
                         else:
-                            # 末尾のクリップを選択（インポート直後）
                             if _clips:
                                 clip_cb.current(len(_clips) - 1)
                                 _show_clip_info()
                         clip_info_lbl.configure(
-                            text=f"✓ DaVinci メディアプールにインポートしました",
+                            text="✓ DaVinci メディアプールにインポートしました",
                             fg=GREEN,
                         )
                         return
+                    # ImportMedia が空リスト返却 = DaVinci 側でインポート拒否
+                    # → direct_file_path フォールバックに継続
             except Exception:
                 pass
         # DaVinci 未接続またはインポート失敗 → 直接パスをセット
@@ -845,6 +846,13 @@ def run_gui():
             messagebox.showerror("ファイルエラー",
                                  f"ファイルが見つかりません:\n{file_path}", parent=root)
             return
+
+        # プロンプト・スタイル取得（_worker が閉じる前に外スコープで確定させる）
+        prompt = prompt_box.get("1.0", "end").strip()
+        if prompt == PLACEHOLDER:
+            prompt = ""
+        s_idx  = style_combo.current()
+        prof_id = styles_data[s_idx - 1].get("id", "") if s_idx > 0 and s_idx - 1 < len(styles_data) else ""
 
         btn_run.configure(state="disabled", text="処理中...")
         edit_progress.start(10)

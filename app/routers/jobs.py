@@ -117,11 +117,9 @@ def job_status(job_id: str, user: dict = Depends(require_user)):
 
 
 @router.get("/{job_id}/download")
-def job_download(job_id: str):
-    """ZIP ダウンロード（アンカータグ対応のため認証不要。UUID が推測困難なため十分なガード）。"""
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+def job_download(job_id: str, user: dict = Depends(require_user)):
+    """ZIP ダウンロード。"""
+    job = _get_owned_job(job_id, user)
     if job.status != JobStatus.completed:
         raise HTTPException(status_code=400, detail="Job not completed yet")
 
@@ -146,11 +144,9 @@ def job_download(job_id: str):
 
 
 @router.get("/{job_id}/mp4")
-def job_mp4(job_id: str):
-    """MP4 ダウンロード（アンカータグ対応のため認証不要）。"""
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+def job_mp4(job_id: str, user: dict = Depends(require_user)):
+    """MP4 ダウンロード。"""
+    job = _get_owned_job(job_id, user)
     if job.status != JobStatus.completed:
         raise HTTPException(status_code=400, detail="Job not completed yet")
 
@@ -174,13 +170,11 @@ def job_mp4(job_id: str):
 
 
 @router.get("/{job_id}/premiere-xml")
-def job_premiere_xml(job_id: str):
+def job_premiere_xml(job_id: str, user: dict = Depends(require_user)):
     import io
     import zipfile
 
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    job = _get_owned_job(job_id, user)
     if job.status != JobStatus.completed:
         raise HTTPException(status_code=400, detail="Job not completed yet")
 
@@ -216,13 +210,11 @@ def job_premiere_xml(job_id: str):
 
 
 @router.get("/{job_id}/edl")
-def job_edl(job_id: str):
+def job_edl(job_id: str, user: dict = Depends(require_user)):
     import io
     import zipfile
 
-    job = get_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    job = _get_owned_job(job_id, user)
     if job.status != JobStatus.completed:
         raise HTTPException(status_code=400, detail="Job not completed yet")
 

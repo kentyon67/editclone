@@ -30,6 +30,7 @@ router = APIRouter(prefix="/videos", tags=["videos"])
 
 UPLOAD_DIR = Path("uploads")
 ALLOWED_EXTENSIONS = {".mp4", ".mov", ".m4v"}
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB
 
 
 @router.post("/upload")
@@ -51,6 +52,11 @@ async def upload_video(
     save_path = UPLOAD_DIR / saved_name
 
     content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({len(content) // 1024 // 1024} MB). Maximum is {MAX_UPLOAD_BYTES // 1024 // 1024} MB.",
+        )
     save_path.write_bytes(content)
 
     # クラウドストレージにも保存（Railway 再起動後の復元用）

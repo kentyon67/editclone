@@ -197,8 +197,8 @@ async function sendChatMessage() {
     if (!xmlRes.ok) throw new Error(`rich-premiere-xml HTTP ${xmlRes.status}`);
     const xmlText = await xmlRes.text();
 
-    // 3. UXP ファイルシステムに保存して Premiere Pro にインポート
-    setChatStatus("Premiere Pro にインポート中...", "info");
+    // 3. UXP ファイルシステムに保存
+    setChatStatus("XML を保存中...", "info");
     const tempFolder = await fs.getTemporaryFolder();
     const xmlFile = await tempFolder.createFile(
       `editclone_chat_${jobId}_${Date.now()}.xml`,
@@ -206,21 +206,20 @@ async function sendChatMessage() {
     );
     await xmlFile.write(xmlText, { format: storage.formats.utf8 });
 
-    const ppCore = require("premierePro");
-    const app = ppCore.app;
-    if (!app.project) {
-      appendChatMsg("system", "⚠ Premiere Pro のプロジェクトを開いてから再試行してください");
-    } else {
-      const imported = app.project.importFiles(
-        [xmlFile.nativePath], true, app.project.getInsertionBin(), false
-      );
-      if (imported) {
-        appendChatMsg("system", "✅ Premiere Pro にインポートしました");
-        // 暗黙的学習
-        sendImplicitFeedback(jobId).catch(() => {});
-      } else {
-        appendChatMsg("system", `⚠ インポート失敗 — ファイル保存先: ${xmlFile.nativePath}`);
-      }
+    // 4. Premiere Pro でファイルを開く
+    // UXP の importFiles() は XMEML シーケンスを受け付けないため
+    // shell.openPath() でシステムの関連付け（Premiere Pro）で開く
+    setChatStatus("Premiere Pro でファイルを開いています...", "info");
+    try {
+      const { shell } = require("uxp");
+      await shell.openPath(xmlFile.nativePath);
+      appendChatMsg("system", `✅ XML を保存しました。Premiere Pro で開いています...\n📂 ${xmlFile.nativePath}`);
+      appendChatMsg("system", "ℹ Premiere Pro で「シーケンスとしてインポート」を選択してください");
+      sendImplicitFeedback(jobId).catch(() => {});
+    } catch (openErr) {
+      // shell.openPath が使えない環境ではパスを表示してユーザーに案内
+      appendChatMsg("system", `✅ XML を保存しました\n📂 ${xmlFile.nativePath}\n\nPremiereの「ファイル → 読み込み」でこのXMLを開いてください`);
+      sendImplicitFeedback(jobId).catch(() => {});
     }
     hideChatStatus();
 
@@ -332,25 +331,20 @@ async function importJob(jobId) {
     const xmlFile = await tempFolder.createFile(`editclone_${jobId}.xml`, { overwrite: true });
     await xmlFile.write(xmlText, { format: storage.formats.utf8 });
 
-    if (statusEl) statusEl.textContent = "Premiere Pro にインポート中...";
-    const ppCore = require("premierePro");
-    const app = ppCore.app;
-    if (!app.project) {
-      throw new Error("プロジェクトを開いてください（File > New Project）");
-    }
+    // UXP の importFiles() は XMEML シーケンスを受け付けないため
+    // shell.openPath() でシステムの関連付けから Premiere Pro で開く
+    if (statusEl) statusEl.textContent = "Premiere Pro でファイルを開いています...";
+    try {
+      const { shell } = require("uxp");
+      await shell.openPath(xmlFile.nativePath);
+    } catch (_) { /* shell.openPath が使えない環境ではスキップ */ }
 
-    const imported = app.project.importFiles(
-      [xmlFile.nativePath], true, app.project.getInsertionBin(), false
-    );
-    if (imported) {
-      if (statusEl) statusEl.textContent =
-        "✅ インポート完了！ メディアがオフラインの場合は右クリック → Link Media で元ファイルを指定してください";
-      // 暗黙的学習: インポート完了 = 肯定的フィードバックとして自動記録
-      sendImplicitFeedback(jobId).catch(() => {});
-      setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 2500);
-    } else {
-      throw new Error("インポートに失敗しました");
-    }
+    if (statusEl) statusEl.textContent =
+      `✅ XML を保存しました。\n📂 ${xmlFile.nativePath}\n\n` +
+      "Premiere Pro の「ファイル → 読み込み」でこのXMLを開き、「シーケンスとしてインポート」を選択してください。\n" +
+      "メディアがオフラインの場合は右クリック → Link Media で元ファイルを指定してください。";
+    sendImplicitFeedback(jobId).catch(() => {});
+    setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 4000);
   } catch (err) {
     if (statusEl) statusEl.textContent = `❌ ${err.message}`;
     setTimeout(() => { showScreen("agent"); switchTab("jobs"); }, 3000);

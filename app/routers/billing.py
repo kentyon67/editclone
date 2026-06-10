@@ -72,7 +72,7 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(alias=
     payload = await request.body()
 
     if not WEBHOOK_SECRET:
-        return JSONResponse({"status": "webhook_secret_not_configured"})
+        raise HTTPException(status_code=503, detail="Webhook secret not configured — set STRIPE_WEBHOOK_SECRET")
 
     try:
         event = stripe.Webhook.construct_event(payload, stripe_signature, WEBHOOK_SECRET)

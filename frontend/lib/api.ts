@@ -49,12 +49,13 @@ export async function uploadVideo(file: File): Promise<{ video_id: string; filen
 
 export async function startProcessing(
   videoId: string,
-  options: { noise_db?: number; min_duration?: number; prompt?: string } = {}
+  options: { noise_db?: number; min_duration?: number; prompt?: string; style_profile_id?: string } = {}
 ): Promise<{ job_id: string; video_id: string; status: string }> {
   const params = new URLSearchParams();
   if (options.noise_db !== undefined) params.set("noise_db", String(options.noise_db));
   if (options.min_duration !== undefined) params.set("min_duration", String(options.min_duration));
   if (options.prompt) params.set("prompt", options.prompt);
+  if (options.style_profile_id) params.set("style_profile_id", options.style_profile_id);
 
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/videos/process/${videoId}?${params}`, {
