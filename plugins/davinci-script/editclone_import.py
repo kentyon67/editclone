@@ -1185,18 +1185,26 @@ def run_gui():
                     except Exception:
                         pass
 
-                # 3. ファイルダイアログで手動選択
+                # 3. ファイルダイアログで手動選択（mainスレッドで実行）
                 if not src_file:
                     _append_chat("system", "ℹ 元動画ファイルを選択してください...")
-                    import tkinter.filedialog as fd
-                    chosen = fd.askopenfilename(
-                        title="元の動画ファイルを選択してください",
-                        filetypes=[
-                            ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v"),
-                            ("すべてのファイル", "*.*"),
-                        ],
-                        parent=root,
-                    )
+                    import queue as _queue
+                    _q: _queue.Queue = _queue.Queue()
+
+                    def _ask_file():
+                        import tkinter.filedialog as fd
+                        chosen = fd.askopenfilename(
+                            title="元の動画ファイルを選択してください",
+                            filetypes=[
+                                ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v"),
+                                ("すべてのファイル", "*.*"),
+                            ],
+                            parent=root,
+                        )
+                        _q.put(chosen or "")
+
+                    root.after(0, _ask_file)
+                    chosen = _q.get(timeout=120)  # 2分待機
                     if chosen:
                         src_file = chosen
 

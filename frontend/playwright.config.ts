@@ -1,6 +1,18 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "https://editclone.vercel.app";
+/**
+ * ローカルサーバーで実行 (デフォルト):
+ *   npm run test:e2e
+ *
+ * 本番 URL で実行:
+ *   PLAYWRIGHT_BASE_URL=https://your-url.vercel.app npm run test:e2e
+ *
+ * 本番保護バイパス:
+ *   PLAYWRIGHT_BASE_URL=... VERCEL_BYPASS=<secret> npm run test:e2e
+ */
+
+const USE_LOCAL = !process.env.PLAYWRIGHT_BASE_URL;
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,6 +29,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure",
     trace: "on-first-retry",
+    extraHTTPHeaders: process.env.VERCEL_BYPASS
+      ? { "x-vercel-protection-bypass": process.env.VERCEL_BYPASS }
+      : {},
   },
 
   projects: [
@@ -26,12 +41,12 @@ export default defineConfig({
     },
   ],
 
-  webServer: process.env.PLAYWRIGHT_LOCAL
+  webServer: USE_LOCAL
     ? {
         command: "npm run dev",
         port: 3000,
         reuseExistingServer: true,
-        timeout: 60_000,
+        timeout: 120_000,
       }
     : undefined,
 });
