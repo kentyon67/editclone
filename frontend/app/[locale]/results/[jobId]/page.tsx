@@ -6,7 +6,8 @@ import {
   Download, Copy, Check, Captions, BookOpen,
   FileText, Loader2, CheckCircle, XCircle, ArrowLeft, Film,
   Share2, Clapperboard, MonitorPlay, Scissors, ThumbsUp, ThumbsDown, Minus, Layers, Wand2,
-  MessageSquare, Send, Sparkles, RefreshCw
+  MessageSquare, Send, Sparkles, RefreshCw, Gauge, ZoomIn, Shuffle, Type,
+  Volume2, Palette, MapPin, Music, Crop, FileVideo,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -159,6 +160,42 @@ function fmtTime(seconds: number): string {
   return `${m}:${s.padStart(4, "0")}`;
 }
 
+const OP_ICONS: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
+  cut:        { icon: <Scissors className="w-3 h-3" />,   color: "text-purple-500", label: "カット" },
+  trim:       { icon: <Crop className="w-3 h-3" />,       color: "text-purple-400", label: "トリム" },
+  speed:      { icon: <Gauge className="w-3 h-3" />,      color: "text-blue-500",   label: "速度" },
+  subtitle:   { icon: <Captions className="w-3 h-3" />,   color: "text-green-500",  label: "字幕" },
+  zoom:       { icon: <ZoomIn className="w-3 h-3" />,     color: "text-cyan-500",   label: "ズーム" },
+  transition: { icon: <Shuffle className="w-3 h-3" />,    color: "text-indigo-500", label: "トランジション" },
+  text:       { icon: <Type className="w-3 h-3" />,       color: "text-yellow-600", label: "テキスト" },
+  audio:      { icon: <Volume2 className="w-3 h-3" />,    color: "text-orange-500", label: "音量" },
+  color:      { icon: <Palette className="w-3 h-3" />,    color: "text-pink-500",   label: "カラー" },
+  marker:     { icon: <MapPin className="w-3 h-3" />,     color: "text-red-400",    label: "マーカー" },
+  bgm:        { icon: <Music className="w-3 h-3" />,      color: "text-teal-500",   label: "BGM" },
+};
+
+function OperationBadges({ operations }: { operations: Array<{ type: string; description?: string }> }) {
+  const valid = operations.filter(op => op.type !== "error");
+  if (!valid.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1">
+      {valid.map((op, j) => {
+        const meta = OP_ICONS[op.type] || { icon: <FileVideo className="w-3 h-3" />, color: "text-gray-400", label: op.type };
+        return (
+          <span
+            key={j}
+            title={op.description}
+            className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-white/50 border border-current/20 font-medium ${meta.color}`}
+          >
+            {meta.icon}
+            {meta.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function ResultsView({ job }: { job: JobStatusResponse }) {
   const t = useTranslations("results");
   const locale = useLocale();
@@ -182,6 +219,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [refinedMp4Url, setRefinedMp4Url] = useState<string | null>(null);
   const [refineSuggestions, setRefineSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [needsFcpxmlNote, setNeedsFcpxmlNote] = useState(false);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -204,6 +242,41 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
     window.addEventListener("editclone-status", onPluginStatus);
     return () => window.removeEventListener("editclone-status", onPluginStatus);
   }, [job.job_id]);
+
+  async function handleChatSend() {
+    const prompt = chatInput.trim();
+    if (!prompt || chatLoading) return;
+    setChatInput("");
+    setChatLoading(true);
+    setNeedsFcpxmlNote(false);
+    setChatHistory((h) => [...h, { role: "user", content: prompt }]);
+    try {
+      const res = await refineJob(job.job_id, prompt, true);
+      if (res.mp4_base64) {
+        const blob = new Blob(
+          [Uint8Array.from(atob(res.mp4_base64), (c) => c.charCodeAt(0))],
+          { type: "video/mp4" }
+        );
+        setRefinedMp4Url(URL.createObjectURL(blob));
+      }
+      if (res.needs_fcpxml_import) setNeedsFcpxmlNote(true);
+      const opSummary = res.operations
+        .filter((o) => o.type !== "error")
+        .map((o) => o.description || o.type)
+        .join("、") || "操作なし";
+      setChatHistory((h) => [
+        ...h,
+        { role: "assistant", content: opSummary, operations: res.operations },
+      ]);
+    } catch (err) {
+      setChatHistory((h) => [
+        ...h,
+        { role: "assistant", content: `エラー: ${err instanceof Error ? err.message : "不明なエラー"}` },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   async function handleSaveMp4() {
     const mp4Url = getMp4Url(job.job_id);
@@ -367,16 +440,8 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
                     : "bg-gray-100 text-gray-800 rounded-bl-sm"
                 }`}>
                   <p className="leading-relaxed">{msg.content}</p>
-                  {msg.role === "assistant" && msg.operations && msg.operations.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {msg.operations.filter(op => op.type !== "error").map((op, j) => (
-                        <div key={j} className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
-                          <span className="font-mono text-purple-600">[{op.type}]</span>
-                          <span className="truncate">{op.description}</span>
-                        </div>
-                      ))}
-                    </div>
+                  {msg.role === "assistant" && msg.operations && (
+                    <OperationBadges operations={msg.operations} />
                   )}
                 </div>
               </div>
@@ -466,6 +531,14 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
           </div>
         )}
 
+        {/* FCPXML 通知 */}
+        {needsFcpxmlNote && (
+          <div className="mx-4 mb-2 flex items-start gap-2 text-xs bg-blue-50 border border-blue-200 text-blue-700 px-3 py-2 rounded-xl">
+            <FileVideo className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+            <span>速度変更・トランジション等は FCPXML/Premiere XML に反映済みです。ZIP をダウンロードして NLE でインポートしてください。</span>
+          </div>
+        )}
+
         {/* 入力エリア */}
         <div className="px-4 py-3 flex gap-2">
           <input
@@ -473,39 +546,9 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !chatLoading && chatInput.trim()) {
+              if (e.key === "Enter" && !e.shiftKey && chatInput.trim()) {
                 e.preventDefault();
-                (async () => {
-                  const prompt = chatInput.trim();
-                  setChatInput("");
-                  setChatLoading(true);
-                  setChatHistory((h) => [...h, { role: "user", content: prompt }]);
-                  try {
-                    const res = await refineJob(job.job_id, prompt, true);
-                    if (res.mp4_base64) {
-                      const blob = new Blob(
-                        [Uint8Array.from(atob(res.mp4_base64), (c) => c.charCodeAt(0))],
-                        { type: "video/mp4" }
-                      );
-                      setRefinedMp4Url(URL.createObjectURL(blob));
-                    }
-                    const opSummary = res.operations
-                      .filter((o) => o.type !== "error")
-                      .map((o) => o.description || o.type)
-                      .join("、") || "操作なし";
-                    setChatHistory((h) => [
-                      ...h,
-                      { role: "assistant", content: opSummary, operations: res.operations },
-                    ]);
-                  } catch (err) {
-                    setChatHistory((h) => [
-                      ...h,
-                      { role: "assistant", content: `エラー: ${err instanceof Error ? err.message : "不明なエラー"}` },
-                    ]);
-                  } finally {
-                    setChatLoading(false);
-                  }
-                })();
+                handleChatSend();
               }
             }}
             placeholder="例: フィラーを除去して、冒頭の挨拶もカット"
@@ -514,38 +557,7 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
           />
           <button
             disabled={chatLoading || !chatInput.trim()}
-            onClick={async () => {
-              const prompt = chatInput.trim();
-              if (!prompt) return;
-              setChatInput("");
-              setChatLoading(true);
-              setChatHistory((h) => [...h, { role: "user", content: prompt }]);
-              try {
-                const res = await refineJob(job.job_id, prompt, true);
-                if (res.mp4_base64) {
-                  const blob = new Blob(
-                    [Uint8Array.from(atob(res.mp4_base64), (c) => c.charCodeAt(0))],
-                    { type: "video/mp4" }
-                  );
-                  setRefinedMp4Url(URL.createObjectURL(blob));
-                }
-                const opSummary = res.operations
-                  .filter((o) => o.type !== "error")
-                  .map((o) => o.description || o.type)
-                  .join("、") || "操作なし";
-                setChatHistory((h) => [
-                  ...h,
-                  { role: "assistant", content: opSummary, operations: res.operations },
-                ]);
-              } catch (err) {
-                setChatHistory((h) => [
-                  ...h,
-                  { role: "assistant", content: `エラー: ${err instanceof Error ? err.message : "不明なエラー"}` },
-                ]);
-              } finally {
-                setChatLoading(false);
-              }
-            }}
+            onClick={handleChatSend}
             className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-200 text-white rounded-xl transition-colors flex items-center gap-1.5 text-sm font-medium"
           >
             {chatLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

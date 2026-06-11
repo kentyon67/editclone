@@ -623,16 +623,28 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
         pass
 
     # Claude でプロンプトを解析して操作リストを生成
-    from app.services.interactive_edit import parse_edit_prompt
+    # 複雑なプロンプトはエージェントチームで多角的に分析する
     current_cuts = result.get("cuts") or []
-    operations = parse_edit_prompt(
-        prompt=prompt,
-        transcript=transcript,
-        current_cuts=current_cuts,
-        duration=total_duration,
-        fps=fps,
-        history=[],
-    )
+    from app.services.agent_teams import run_agent_team, should_use_teams
+    from app.services.interactive_edit import parse_edit_prompt
+    if should_use_teams(prompt):
+        team_result = run_agent_team(
+            transcript=transcript,
+            cuts=current_cuts,
+            duration=total_duration,
+            fps=fps,
+            user_prompt=prompt,
+        )
+        operations = team_result["operations"]
+    else:
+        operations = parse_edit_prompt(
+            prompt=prompt,
+            transcript=transcript,
+            current_cuts=current_cuts,
+            duration=total_duration,
+            fps=fps,
+            history=[],
+        )
 
     # cut 操作からセグメントを取得
     keep_segments: list[dict] = []
@@ -677,6 +689,7 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
         fcpxml = build_fcpxml(
             video_path, noise_db=job.noise_db, min_duration=job.min_duration,
             cuts=new_cuts, video_info=info, segments=remapped, caption_style=caption_style,
+            operations=operations,
         )
 
     # MP4 再レンダリング（動画がある場合のみ）

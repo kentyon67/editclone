@@ -22,6 +22,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any
 
 import anthropic
+from app.services.operation_schema import OPERATION_SCHEMA as _OPERATION_SCHEMA
 
 logger = logging.getLogger(__name__)
 
@@ -39,50 +40,6 @@ AGENT_ROLES: dict[str, str] = {
     "pacing_agent": "専門家: テンポ・速度・BGM提案",
     "hook_agent":  "専門家: 冒頭フック・エンディング・バイラル要素",
 }
-
-# ── 操作スキーマ（interactive_edit.py と同一定義） ─────────────────────────
-_OPERATION_SCHEMA = """
-返すJSONは操作オブジェクトの配列です。複数同時指定可。
-各操作には必ず "description" フィールドで日本語の説明を含める。
-
-━━ 操作タイプ一覧 ━━
-
-1. カット構成変更（最重要）
-{"type":"cut", "keep_segments":[{"start":float,"end":float},...], "description":"説明"}
-- keep_segments は保持する区間。カットしたい部分は除外する。
-
-2. 冒頭/末尾トリム
-{"type":"trim", "start_seconds":float, "end_seconds":float, "description":"説明"}
-
-3. 再生速度変更
-{"type":"speed", "speed_percent":int, "description":"説明"}
-- 100=等速, 150=1.5倍速, 200=2倍速, 50=0.5倍速
-
-4. 字幕追加
-{"type":"subtitle", "description":"説明"}
-
-5. ズーム
-{"type":"zoom", "zoom_level":float, "description":"説明"}
-- 1.0=等倍, 1.05=subtle, 1.10=punch
-
-6. トランジション追加
-{"type":"transition", "style":"dissolve|fade_to_black|wipe", "duration":float, "description":"説明"}
-
-7. テキストオーバーレイ
-{"type":"text", "text":"表示テキスト", "start":float, "duration":float, "description":"説明"}
-
-8. 音量・フェード調整
-{"type":"audio", "target":"all|voice|bgm", "volume_db":float, "description":"説明"}
-
-9. カラー補正
-{"type":"color", "preset":"warm|cool|cinematic|bright|dark|bw", "description":"説明"}
-
-10. マーカー追加
-{"type":"marker", "moments":[{"time":float,"label":"str","color":"red|orange|yellow|green|blue|purple"},...], "description":"説明"}
-
-11. BGM追加（案内のみ）
-{"type":"bgm", "mood":"upbeat|calm|dramatic|happy|sad|none", "description":"説明"}
-"""
 
 # ── エージェント固有のシステムプロンプト ────────────────────────────────────
 _AGENT_SYSTEM_PROMPTS: dict[str, str] = {
