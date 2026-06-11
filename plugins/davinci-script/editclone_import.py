@@ -603,6 +603,7 @@ def run_gui():
         "srt_available": False,
         "source_clip": None,        # DaVinci media pool item
         "direct_file_path": "",     # ファイルピッカーで直接選択したパス
+        "reference_hint": "",       # 参考スタイル / 模倣対象（チャットでも継続して使用）
     }
     styles_data: list = []
     jobs_data: list = []
@@ -627,15 +628,36 @@ def run_gui():
     _mk_label(tab_edit, "① 編集する動画を選択:", pady=(12, 2))
 
     # 「ファイルを選択」ボタン（最も目立つ操作）
+    def _best_video_dir() -> str:
+        """動画が入っていそうなフォルダを優先順位付きで返す。"""
+        home = Path.home()
+        candidates = [
+            home / "Movies",
+            home / "Videos",
+            home / "iCloudDrive",
+            home / "Downloads",
+            home / "Desktop",
+            home,
+        ]
+        # 動画ファイルが 1 件以上ある最初のフォルダを優先
+        exts = {"*.mp4", "*.mov", "*.MP4", "*.MOV", "*.avi", "*.mkv", "*.m4v", "*.mxf"}
+        for cand in candidates:
+            if not cand.exists():
+                continue
+            for ext in exts:
+                if list(cand.glob(ext)):
+                    return str(cand)
+        # どこにも動画がなければ Downloads → home
+        dl = home / "Downloads"
+        return str(dl) if dl.exists() else str(home)
+
     def _open_file_dialog():
         from tkinter import filedialog
-        _dl = Path.home() / "Downloads"
-        _initial = str(_dl) if _dl.exists() else str(Path.home())
         path = filedialog.askopenfilename(
             title="編集する動画ファイルを選択",
-            initialdir=_initial,
+            initialdir=_best_video_dir(),
             filetypes=[
-                ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v *.wmv *.MP4 *.MOV"),
+                ("動画ファイル", "*.mp4 *.mov *.MP4 *.MOV *.avi *.mkv *.mxf *.m4v *.wmv"),
                 ("すべてのファイル", "*.*"),
             ],
             parent=root,
@@ -806,7 +828,7 @@ def run_gui():
 
     # スタイル選択
     sr = tk.Frame(tab_edit, bg=BG)
-    sr.pack(fill="x", padx=12, pady=(0, 10))
+    sr.pack(fill="x", padx=12, pady=(0, 4))
     tk.Label(sr, text="スタイル:", bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(side="left", padx=(0, 6))
     style_var = tk.StringVar(value="なし（デフォルト）")
     style_combo = ttk.Combobox(sr, textvariable=style_var, state="readonly",
@@ -814,6 +836,17 @@ def run_gui():
     style_combo["values"] = ["なし（デフォルト）"]
     style_combo.current(0)
     style_combo.pack(side="left")
+
+    # 参考スタイル / 参考動画 URL
+    ref_frame = tk.Frame(tab_edit, bg=BG)
+    ref_frame.pack(fill="x", padx=12, pady=(0, 8))
+    tk.Label(ref_frame, text="参考:", bg=BG, fg=MUTED,
+             font=("Helvetica", 9)).pack(side="left", padx=(0, 4))
+    ref_var = tk.StringVar()
+    ref_entry = ttk.Entry(ref_frame, textvariable=ref_var, font=("Helvetica", 9))
+    ref_entry.pack(side="left", fill="x", expand=True)
+    tk.Label(ref_frame, text="スタイル説明 or YouTube URL",
+             bg=BG, fg=BORDER, font=("Helvetica", 8)).pack(side="left", padx=(4, 0))
 
     edit_status = tk.Label(tab_edit, text="↑ 動画ファイルを選択して「AIで編集」をクリック",
                            bg=BG, fg=MUTED, font=("Helvetica", 9), wraplength=460)
@@ -862,12 +895,13 @@ def run_gui():
                                  f"ファイルが見つかりません:\n{file_path}", parent=root)
             return
 
-        # プロンプト・スタイル取得（_worker が閉じる前に外スコープで確定させる）
+        # プロンプト・スタイル・参考スタイル取得（_worker が閉じる前に外スコープで確定させる）
         prompt = prompt_box.get("1.0", "end").strip()
         if prompt == PLACEHOLDER:
             prompt = ""
-        s_idx  = style_combo.current()
+        s_idx   = style_combo.current()
         prof_id = styles_data[s_idx - 1].get("id", "") if s_idx > 0 and s_idx - 1 < len(styles_data) else ""
+        reference_hint = ref_var.get().strip()
 
         btn_run.configure(state="disabled", text="処理中...")
         edit_progress.start(10)
@@ -942,6 +976,7 @@ def run_gui():
                 st_set("srt_available",      srt_ok)
                 st_set("source_clip",        media_clip)
                 st_set("direct_file_path",   "")  # リセット
+                st_set("reference_hint",     reference_hint)  # チャットでも継続使用
 
                 # 会話履歴をリセット
                 _chat_history.clear()
@@ -970,6 +1005,7 @@ def run_gui():
                 if has_tl:
                     _captured_job_id = job_id
                     _captured_prompt = prompt
+                    _captured_ref    = reference_hint
                     def _auto_enrich():
                         try:
                             enrich_base = (
@@ -984,7 +1020,8 @@ def run_gui():
                             _append_chat("system", "ℹ リッチ編集オプションを分析中...")
                             resp = api_post(
                                 f"/plugin/jobs/{_captured_job_id}/team-edit",
-                                {"prompt": enrich_prompt, "history": [], "use_teams": False},
+                                {"prompt": enrich_prompt, "history": [], "use_teams": False,
+                                 "reference_hint": _captured_ref},
                                 timeout=60,
                             )
                             if _state.get("job_id") != _captured_job_id:
@@ -1097,6 +1134,11 @@ def run_gui():
         dur  = float(j.get("duration", 0))
         fps  = float(j.get("fps", 30))
         _append_chat("system", f"ℹ ジョブ「{name}」を選択しました ({dur:.1f}秒 / {fps:.2f}fps)\n指示を入力してください。")
+        # チャット参考フィールドに現在の状態を反映
+        try:
+            chat_ref_var.set(_state.get("reference_hint", ""))
+        except Exception:
+            pass
 
         # バックグラウンドで詳細を取得（srt_available・cuts・project_id を正確にセット）
         def _fetch_details():
@@ -1182,6 +1224,25 @@ def run_gui():
     # 初期メッセージ
     _append_chat("system", "✓ EditClone チャット準備完了")
     _append_chat("system", "ℹ AI編集タブで動画を処理するか、上のジョブ選択で過去の処理を選んでください")
+
+    # 参考スタイル行（チャット版 — AI編集タブで設定した値を引き継ぐ）
+    chat_ref_frame = tk.Frame(input_frame, bg=BG2)
+    chat_ref_frame.pack(fill="x", padx=8, pady=(4, 0))
+    tk.Label(chat_ref_frame, text="参考:", bg=BG2, fg=MUTED,
+             font=("Helvetica", 8)).pack(side="left", padx=(0, 4))
+    chat_ref_var = tk.StringVar()
+    chat_ref_entry = ttk.Entry(chat_ref_frame, textvariable=chat_ref_var,
+                               font=("Helvetica", 8))
+    chat_ref_entry.pack(side="left", fill="x", expand=True)
+    tk.Label(chat_ref_frame, text="スタイル説明 or URL (任意)",
+             bg=BG2, fg=BORDER, font=("Helvetica", 7)).pack(side="left", padx=(4, 0))
+
+    def _sync_ref_hint(*_):
+        val = chat_ref_var.get().strip()
+        if val:
+            st_set("reference_hint", val)
+    chat_ref_entry.bind("<FocusOut>", _sync_ref_hint)
+    chat_ref_entry.bind("<Return>", _sync_ref_hint)
 
     # チャット入力ウィジェット（input_frame は上部で先行 pack 済み）
     chat_input = tk.Text(
@@ -1281,13 +1342,11 @@ def run_gui():
 
                     def _ask_file():
                         import tkinter.filedialog as fd
-                        _dl2 = Path.home() / "Downloads"
-                        _init2 = str(_dl2) if _dl2.exists() else str(Path.home())
                         chosen = fd.askopenfilename(
                             title="元の動画ファイルを選択してください",
-                            initialdir=_init2,
+                            initialdir=_best_video_dir(),
                             filetypes=[
-                                ("動画ファイル", "*.mp4 *.mov *.avi *.mkv *.mxf *.m4v"),
+                                ("動画ファイル", "*.mp4 *.mov *.MP4 *.MOV *.avi *.mkv *.mxf *.m4v"),
                                 ("すべてのファイル", "*.*"),
                             ],
                             parent=root,
@@ -1384,10 +1443,13 @@ def run_gui():
             try:
                 # 複数指示またはプロンプト長 > 20 文字の場合はエージェントチームを使用
                 use_teams = len(msg) > 20 or "," in msg or "、" in msg
+                # 会話中に変化したカット状態 + 参考スタイルを送信
                 payload = {
                     "prompt": msg,
                     "history": _chat_history[-10:],
                     "use_teams": use_teams,
+                    "current_cuts": _state.get("cuts") or [],
+                    "reference_hint": _state.get("reference_hint", ""),
                 }
                 if use_teams:
                     _set_cst("🤖 エージェントチーム起動中...", MUTED)
@@ -1442,22 +1504,31 @@ def run_gui():
                         _state.get("source_clip"),
                         _append_chat_sync,
                     )
+                    # cut 操作が含まれていた場合、最新の keep_segments を _state に保存
+                    # → 次の会話で AI が最新のカット状態を認識できる
+                    for op in ops:
+                        if op.get("type") == "cut" and op.get("keep_segments"):
+                            st_set("cuts", op["keep_segments"])
+                            break
 
                 _append_chat("divider", "")
 
-                # Python API 非対応の操作がある場合 → FCPXML インポートボタンを表示
+                # Python API 非対応操作（speed/transition/text/color）→ FCPXML を自動適用
                 if needs_fcpxml and ops:
                     _pending_ops_for_fcpxml.clear()
                     _pending_ops_for_fcpxml.extend(ops)
-                    _append_chat("system",
-                        "ℹ 速度・トランジション等の操作は FCPXML 経由でインポートできます"
-                    )
-                    root.after(0, lambda: (
+                    _append_chat("system", "ℹ 速度・トランジション等を FCPXML で自動適用中...")
+                    # バックグラウンドで自動インポート実行
+                    def _auto_fcpxml():
+                        _do_fcpxml_import()
+                    threading.Thread(target=_auto_fcpxml, daemon=True).start()
+                    # フォールバック用にボタンも表示（自動失敗時の手動リカバリ）
+                    root.after(3000, lambda: (
                         btn_import_fcpxml.configure(
-                            state="normal", text="📥 FCPXML でインポート (速度/トランジション等)"
+                            state="normal", text="📥 FCPXML 再インポート"
                         ),
                         btn_import_fcpxml.pack(fill="x", padx=8, pady=(0, 4), before=btn_send),
-                    ))
+                    ) if _pending_ops_for_fcpxml else None)
 
                 _set_cst("✓ 完了", GREEN)
 

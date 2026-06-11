@@ -160,6 +160,7 @@ def _build_context(
     duration: float,
     fps: float,
     user_prompt: str,
+    reference_hint: str = "",
 ) -> str:
     """全エージェントに共通の動画コンテキストを生成する。"""
     seg_lines: list[str] = []
@@ -174,12 +175,18 @@ def _build_context(
         if cuts else "カット未実施"
     )
 
+    reference_section = (
+        f"\n=== 参考スタイル / 模倣対象 ===\n{reference_hint}"
+        if reference_hint else ""
+    )
+
     return (
         f"=== ユーザー指示 ===\n{user_prompt}\n\n"
         f"=== 動画情報 ===\n"
         f"長さ: {duration:.1f}秒  FPS: {fps}\n"
         f"現在のカット状況: {cut_summary}\n\n"
         f"=== トランスクリプト（先頭60セグメント） ===\n{transcript_preview}"
+        f"{reference_section}"
     )
 
 
@@ -411,6 +418,7 @@ def run_agent_team(
     fps: float,
     user_prompt: str,
     history: list | None = None,
+    reference_hint: str = "",
 ) -> dict:
     """
     複数の専門エージェントを並列実行して編集操作リストを生成する。
@@ -437,7 +445,7 @@ def run_agent_team(
             "agents_failed": [...],    # タイムアウト/失敗エージェント名リスト
         }
     """
-    context = _build_context(transcript, cuts, duration, fps, user_prompt)
+    context = _build_context(transcript, cuts, duration, fps, user_prompt, reference_hint)
 
     agent_reports: dict[str, str] = {}
     agent_operations: dict[str, list[dict]] = {}

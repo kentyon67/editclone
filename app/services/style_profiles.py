@@ -206,6 +206,59 @@ def record_feedback(user_id: str, job_id: str, action: str, style_profile_id: Op
         return False
 
 
+def record_prompt_pattern(
+    profile_id: str,
+    user_id: str,
+    prompt: str,
+    operation_types: list[str],
+) -> None:
+    """
+    チャット編集のプロンプト→操作タイプのマッピングをプロファイルに蓄積する。
+    prompt_patterns カラム（JSONB 配列）に追記し、10件ごとに auto-refine を実施する。
+    カラムが存在しない古いプロファイルも graceful に処理する。
+    """
+    try:
+        import datetime
+        import json
+
+        profile = get_profile(profile_id, user_id)
+        if not profile:
+            return
+
+        # 既存パターン取得（カラムがない場合は []）
+        patterns: list[dict] = profile.get("prompt_patterns") or []
+        if not isinstance(patterns, list):
+            patterns = []
+
+        # 既存の同一プロンプトがあればカウントアップ、なければ新規追加
+        matched = next((p for p in patterns if p.get("prompt") == prompt), None)
+        if matched:
+            matched["count"] = matched.get("count", 1) + 1
+            matched["operation_types"] = operation_types
+        else:
+            patterns.append({
+                "prompt": prompt,
+                "operation_types": operation_types,
+                "count": 1,
+            })
+
+        # 最大 50 件（古いものから削除）
+        if len(patterns) > 50:
+            patterns = sorted(patterns, key=lambda p: p.get("count", 1), reverse=True)[:50]
+
+        _client().table("style_profiles").update({
+            "prompt_patterns": patterns,
+            "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }).eq("id", profile_id).eq("user_id", user_id).execute()
+
+        # 10 件ごとに自動改善トリガー
+        if len(patterns) % 10 == 0:
+            _auto_refine_profile(profile_id, user_id)
+
+    except Exception as e:
+        logger.debug("record_prompt_pattern failed: %s", e)
+
+
 def _auto_refine_profile(profile_id: str, user_id: str) -> None:
     """フィードバック蓄積時に自動でプロンプトを改善して default_prompt を更新する。"""
     try:

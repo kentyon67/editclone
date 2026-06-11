@@ -83,6 +83,8 @@ create table if not exists public.style_profiles (
 
 -- テロップスタイル設定（フォントサイズ・位置・色・太字）
 alter table public.style_profiles add column if not exists caption_style jsonb default '{"font_size":28,"position":"bottom","primary_color":"#FFFFFF","outline_color":"#000000","bold":true}'::jsonb;
+-- チャット編集のプロンプトパターン蓄積（暗黙的学習）
+alter table public.style_profiles add column if not exists prompt_patterns jsonb default '[]'::jsonb;
 
 alter table public.style_profiles enable row level security;
 

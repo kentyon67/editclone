@@ -41,6 +41,8 @@ class TeamEditRequest(BaseModel):
     prompt: str
     history: list = []
     use_teams: bool = False
+    reference_hint: str = ""   # 参考スタイル / 模倣対象の説明 or URL
+    current_cuts: list = []    # 会話中に蓄積した最新カット状態（空なら job の元カットを使用）
 
 
 class RichFcpxmlRequest(BaseModel):
@@ -423,6 +425,26 @@ def plugin_chat_edit(
         op.get("type") in ("speed", "transition", "text", "color")
         for op in operations
     )
+
+    # 暗黙的プロンプトパターン学習（バックグラウンド）
+    if operations and user["id"]:
+        import threading
+        def _record_chat_pattern():
+            try:
+                from app.services.style_profiles import get_active_profile, record_prompt_pattern
+                active = get_active_profile(user["id"])
+                if active:
+                    op_types = [op.get("type", "") for op in operations if op.get("type")]
+                    record_prompt_pattern(
+                        profile_id=active["id"],
+                        user_id=user["id"],
+                        prompt=body.prompt,
+                        operation_types=op_types,
+                    )
+            except Exception:
+                pass
+        threading.Thread(target=_record_chat_pattern, daemon=True).start()
+
     return {
         "operations": operations,
         "job_id": job_id,
@@ -453,7 +475,8 @@ def plugin_team_edit(
 
     result = job.result or {}
     transcript = result.get("transcript") or {}
-    current_cuts = result.get("cuts") or []
+    # クライアントから最新カット状態が送られていればそれを使う（会話追跡）
+    current_cuts = body.current_cuts if body.current_cuts else (result.get("cuts") or [])
     info = result.get("info") or {}
     fps = float(info.get("fps", 30))
     duration = float(info.get("duration_seconds", 0))
@@ -471,6 +494,7 @@ def plugin_team_edit(
             fps=fps,
             user_prompt=body.prompt,
             history=body.history,
+            reference_hint=body.reference_hint,
         )
         operations = team_result["operations"]
         agent_reports = team_result["agent_reports"]
@@ -486,6 +510,7 @@ def plugin_team_edit(
             duration=duration,
             fps=fps,
             history=body.history,
+            reference_hint=body.reference_hint,
         )
         agent_reports = {}
         synthesis = ""
@@ -496,6 +521,25 @@ def plugin_team_edit(
         op.get("type") in ("speed", "transition", "text", "color")
         for op in operations
     )
+
+    # 暗黙的プロンプトパターン学習（バックグラウンド）
+    if operations and user["id"]:
+        import threading
+        def _record_pattern():
+            try:
+                from app.services.style_profiles import get_active_profile, record_prompt_pattern
+                active = get_active_profile(user["id"])
+                if active:
+                    op_types = [op.get("type", "") for op in operations if op.get("type")]
+                    record_prompt_pattern(
+                        profile_id=active["id"],
+                        user_id=user["id"],
+                        prompt=body.prompt,
+                        operation_types=op_types,
+                    )
+            except Exception:
+                pass
+        threading.Thread(target=_record_pattern, daemon=True).start()
 
     return {
         "operations": operations,
