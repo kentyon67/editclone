@@ -355,3 +355,144 @@ def job_refine_fcpxml(job_id: str, prompt: str, user: dict = Depends(require_use
         media_type="application/xml",
         headers={"Content-Disposition": f'attachment; filename="refined_{job_id}.fcpxml"'},
     )
+
+
+@router.get("/{job_id}/thumbnail")
+def job_thumbnail(job_id: str, user: dict = Depends(require_user)):
+    """動画の先頭フレームをJPEG画像として返す。"""
+    job = _get_owned_job(job_id, user)
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    info = result.get("info", {})
+    video_path = job.video_path
+
+    if not video_path.exists():
+        try:
+            from app.services.storage import get_local_copy
+            from pathlib import Path
+            video_path = get_local_copy(
+                user["id"], job.video_id, video_path.name, Path("uploads")
+            )
+        except Exception:
+            raise HTTPException(404, "動画ファイルが見つかりません")
+
+    import subprocess, tempfile
+    from pathlib import Path as _Path
+
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        proc = subprocess.run(
+            ["ffmpeg", "-y", "-ss", "0.5", "-i", str(video_path),
+             "-frames:v", "1", "-q:v", "3", "-vf", "scale=480:-1",
+             tmp_path],
+            capture_output=True, timeout=30,
+        )
+        if proc.returncode != 0 or not _Path(tmp_path).stat().st_size:
+            raise HTTPException(503, "サムネイルの生成に失敗しました")
+        img_bytes = _Path(tmp_path).read_bytes()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(503, f"サムネイル生成エラー: {e}")
+    finally:
+        try:
+            _Path(tmp_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    return Response(
+        content=img_bytes,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@router.get("/{job_id}/refine/suggestions")
+def job_refine_suggestions(job_id: str, user: dict = Depends(require_user)):
+    """
+    動画の内容・トランスクリプト・アクティブプロファイルをもとに
+    AIがリファイン用プロンプト候補を提案する。
+    """
+    job = _get_owned_job(job_id, user)
+    if job.status != JobStatus.completed:
+        raise HTTPException(400, "Job not completed yet")
+
+    result = job.result or {}
+    transcript = result.get("transcript", {})
+    info = result.get("info", {})
+    segments = transcript.get("segments") or transcript.get("raw_segments") or []
+    duration = float(info.get("duration_seconds", 0))
+    current_prompt = getattr(job, "prompt", "") or ""
+
+    # 既存のプロンプトパターンから頻出操作も加味
+    profile_patterns: list[dict] = []
+    try:
+        from app.services.style_profiles import get_active_profile
+        active = get_active_profile(user["id"])
+        if active:
+            profile_patterns = active.get("prompt_patterns") or []
+    except Exception:
+        pass
+
+    import os, anthropic as _anthropic
+    client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+    # トランスクリプト冒頭を要約
+    text_sample = " ".join(
+        s.get("text", "") for s in segments[:15] if s.get("text")
+    )[:600]
+
+    top_patterns = sorted(profile_patterns, key=lambda p: p.get("count", 1), reverse=True)[:5]
+    pattern_hint = ""
+    if top_patterns:
+        pattern_hint = "よく使うプロンプト: " + " / ".join(
+            p.get("prompt", "")[:30] for p in top_patterns if p.get("prompt")
+        )
+
+    system = (
+        "あなたはプロの動画編集者です。"
+        "以下の動画内容・現在の編集指示・過去の編集パターンをもとに、"
+        "ユーザーが次にやりたそうな編集操作の候補を5つ提案してください。\n"
+        "各候補は15〜40文字の日本語の指示文にしてください。\n"
+        "JSONで {\"suggestions\": [\"...\", ...]} の形式で返してください。"
+    )
+    user_msg = (
+        f"動画の長さ: {duration:.0f}秒\n"
+        f"現在の指示: {current_prompt or '（なし）'}\n"
+        f"会話内容の冒頭: {text_sample or '（文字起こしなし）'}\n"
+        f"{pattern_hint}"
+    )
+
+    try:
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            system=system,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        import json as _json
+        raw = resp.content[0].text.strip()
+        # JSON ブロックを取り出す
+        if "```" in raw:
+            raw = raw.split("```")[1].lstrip("json").strip()
+        data = _json.loads(raw)
+        suggestions = data.get("suggestions", [])[:5]
+    except Exception as e:
+        log_event("refine_suggestions_error", user_id=user["id"], job_id=job_id,
+                  metadata={"error": str(e)})
+        suggestions = [
+            "言い淀み（えー・あのー）を全部カット",
+            "冒頭の挨拶を10秒カット",
+            "1.5倍速で全体をテンポアップ",
+            "重要なポイントにマーカーを追加",
+            "字幕を追加する",
+        ]
+
+    log_event("refine_suggestions", user_id=user["id"], job_id=job_id,
+              metadata={"count": len(suggestions)})
+
+    return {"job_id": job_id, "suggestions": suggestions}

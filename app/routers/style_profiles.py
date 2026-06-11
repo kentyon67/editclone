@@ -230,9 +230,9 @@ class CopyProfileBody(BaseModel):
 
 
 @router.get("/marketplace")
-def get_marketplace(tag: Optional[str] = None, user: dict = Depends(require_user)):
-    """公開中のスタイルプロファイル一覧を返す。"""
-    return {"profiles": svc.list_public_profiles(limit=50, tag=tag)}
+def get_marketplace(tag: Optional[str] = None, q: Optional[str] = None, user: dict = Depends(require_user)):
+    """公開中のスタイルプロファイル一覧を返す。tag・q でフィルタリング可。"""
+    return {"profiles": svc.list_public_profiles(limit=50, tag=tag, q=q)}
 
 
 @router.get("/marketplace/{profile_id}")

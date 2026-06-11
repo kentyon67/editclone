@@ -18,7 +18,7 @@ import {
   getProfileAccuracy,
   ApiError,
   DEFAULT_CAPTION_STYLE,
-  type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle, type ProfileAccuracy,
+  type StyleProfile, type ReferenceVideo, type ProfileStats, type CaptionStyle, type ProfileAccuracy, type PromptPattern,
 } from "@/lib/api";
 
 type FormData = {
@@ -735,6 +735,40 @@ function ProfileCard({
       <AiRefineSection profile={profile} onApply={onRefineApply} />
       <PublishSection profile={profile} onUpdate={onUpdate} />
       <AccuracySection profileId={profile.id} />
+      <PromptPatternsSection patterns={profile.prompt_patterns} />
+    </div>
+  );
+}
+
+function PromptPatternsSection({ patterns }: { patterns?: PromptPattern[] }) {
+  const [open, setOpen] = useState(false);
+  if (!patterns || patterns.length === 0) return null;
+  const sorted = [...patterns].sort((a, b) => (b.count ?? 1) - (a.count ?? 1)).slice(0, 8);
+  return (
+    <div className="border-t border-gray-100 pt-3 mt-1">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-purple-600 transition-colors w-full text-left"
+      >
+        <BrainCircuit className="w-3.5 h-3.5" />
+        学習済みプロンプト ({patterns.length}件)
+        <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1.5">
+          {sorted.map((p, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="flex-1 text-gray-700 truncate" title={p.prompt}>{p.prompt}</span>
+              <span className="text-gray-400 flex-shrink-0">{p.count}回</span>
+              <div className="flex gap-1 flex-shrink-0">
+                {(p.operation_types || []).slice(0, 3).map((op) => (
+                  <span key={op} className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 text-[10px]">{op}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

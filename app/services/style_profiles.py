@@ -373,8 +373,8 @@ _VALID_TAGS = {
 }
 
 
-def list_public_profiles(limit: int = 30, tag: Optional[str] = None) -> list[dict]:
-    """公開中のスタイルプロファイルを人気順（copy_count降順）で返す。"""
+def list_public_profiles(limit: int = 30, tag: Optional[str] = None, q: Optional[str] = None) -> list[dict]:
+    """公開中のスタイルプロファイルを人気順（copy_count降順）で返す。q でキーワード絞り込み。"""
     try:
         query = (
             _client().table("style_profiles")
@@ -385,7 +385,17 @@ def list_public_profiles(limit: int = 30, tag: Optional[str] = None) -> list[dic
         )
         if tag and tag in _VALID_TAGS:
             query = query.contains("tags", [tag])
-        return query.execute().data or []
+        rows: list[dict] = query.execute().data or []
+        # キーワード絞り込み（name / description / tags をクライアントサイドでフィルタ）
+        if q:
+            q_lower = q.lower()
+            rows = [
+                r for r in rows
+                if q_lower in (r.get("name") or "").lower()
+                or q_lower in (r.get("public_description") or "").lower()
+                or any(q_lower in t.lower() for t in (r.get("tags") or []))
+            ]
+        return rows
     except Exception as e:
         logger.warning("list_public_profiles failed: %s", e)
         return []

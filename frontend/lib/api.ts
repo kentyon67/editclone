@@ -214,6 +214,12 @@ export const DEFAULT_CAPTION_STYLE: CaptionStyle = {
   zoom_effect: "none",
 };
 
+export interface PromptPattern {
+  prompt: string;
+  operation_types: string[];
+  count: number;
+}
+
 export interface StyleProfile {
   id: string;
   user_id: string;
@@ -229,6 +235,7 @@ export interface StyleProfile {
   public_description?: string;
   copy_count?: number;
   tags?: string[];
+  prompt_patterns?: PromptPattern[];
   created_at: string;
   updated_at: string;
 }
@@ -238,11 +245,13 @@ export interface PublicStyleProfile extends Omit<StyleProfile, "is_active" | "jo
   tags: string[];
 }
 
-export async function listMarketplaceProfiles(tag?: string): Promise<{ profiles: PublicStyleProfile[] }> {
+export async function listMarketplaceProfiles(tag?: string, q?: string): Promise<{ profiles: PublicStyleProfile[] }> {
   const headers = await authHeaders();
-  const url = tag
-    ? `${API_URL}/style-profiles/marketplace?tag=${encodeURIComponent(tag)}`
-    : `${API_URL}/style-profiles/marketplace`;
+  const params = new URLSearchParams();
+  if (tag) params.set("tag", tag);
+  if (q) params.set("q", q);
+  const qs = params.toString();
+  const url = `${API_URL}/style-profiles/marketplace${qs ? `?${qs}` : ""}`;
   const res = await fetch(url, { headers });
   if (!res.ok) return { profiles: [] };
   return res.json();
@@ -632,6 +641,20 @@ export async function getBrollSuggestions(jobId: string): Promise<{
   const res = await fetch(`${API_URL}/jobs/${jobId}/broll-suggestions`, { headers });
   if (!res.ok) return handleError(res, "B-roll suggestions failed");
   return res.json();
+}
+
+export async function getRefineSuggestions(jobId: string): Promise<{
+  job_id: string;
+  suggestions: string[];
+}> {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/jobs/${jobId}/refine/suggestions`, { headers });
+  if (!res.ok) return { job_id: jobId, suggestions: [] };
+  return res.json();
+}
+
+export function getJobThumbnailUrl(jobId: string): string {
+  return `${API_URL}/jobs/${jobId}/thumbnail`;
 }
 
 // ---------------------------------------------------------------------------

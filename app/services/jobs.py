@@ -699,9 +699,9 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning("refine MP4 render failed: %s", e)
 
-    # フィードバック記録（refinement = 暗黙的に編集を続けている = partial）
+    # フィードバック記録 + プロンプトパターン学習（Web refine も学習ループに組み込む）
     try:
-        from app.services.style_profiles import get_active_profile, record_feedback
+        from app.services.style_profiles import get_active_profile, record_feedback, record_prompt_pattern
         active = get_active_profile(user_id)
         if active:
             record_feedback(
@@ -711,6 +711,14 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
                 style_profile_id=active["id"],
                 notes=f"auto:web_refine:{prompt[:50]}",
             )
+            op_types = [op.get("type", "") for op in operations if op.get("type")]
+            if op_types:
+                import threading
+                threading.Thread(
+                    target=record_prompt_pattern,
+                    args=(active["id"], user_id, prompt, op_types),
+                    daemon=True,
+                ).start()
     except Exception:
         pass
 

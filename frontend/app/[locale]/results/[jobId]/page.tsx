@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, getBrollSuggestions, refineJob, API_URL, JobStatusResponse, postFeedback, type Project, type BrollSuggestion, type RefineResult } from "@/lib/api";
+import { getJobStatus, getDownloadUrl, getMp4Url, getActiveStyleProfile, listProjects, getBrollSuggestions, refineJob, getRefineSuggestions, API_URL, JobStatusResponse, postFeedback, type Project, type BrollSuggestion, type RefineResult } from "@/lib/api";
 import {
   getPluginMode, NLE_LABELS, importToFCP, importToPremiere, importToDaVinci, PluginNLE
 } from "@/lib/plugin";
@@ -180,6 +180,8 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [refinedMp4Url, setRefinedMp4Url] = useState<string | null>(null);
+  const [refineSuggestions, setRefineSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   useEffect(() => {
     setPluginNLE(getPluginMode());
@@ -414,6 +416,53 @@ function ResultsView({ job }: { job: JobStatusResponse }) {
                 MP4 を保存
               </a>
             </div>
+          </div>
+        )}
+
+        {/* AI 提案チップ */}
+        {refineSuggestions.length === 0 && !loadingSuggestions && chatHistory.length === 0 && (
+          <div className="px-4 pb-1">
+            <button
+              onClick={async () => {
+                setLoadingSuggestions(true);
+                try {
+                  const data = await getRefineSuggestions(job.job_id);
+                  setRefineSuggestions(data.suggestions);
+                } catch { /* ignore */ } finally {
+                  setLoadingSuggestions(false);
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs text-purple-500 hover:text-purple-700 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              AIに編集の提案をもらう
+            </button>
+          </div>
+        )}
+        {loadingSuggestions && (
+          <div className="px-4 pb-1">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400 inline" />
+            <span className="text-xs text-gray-400 ml-1.5">提案を生成中...</span>
+          </div>
+        )}
+        {refineSuggestions.length > 0 && (
+          <div className="px-4 pb-2 flex flex-wrap gap-1.5">
+            {refineSuggestions.map((s) => (
+              <button
+                key={s}
+                onClick={() => setChatInput(s)}
+                className="text-xs px-2.5 py-1 rounded-full border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors truncate max-w-[200px]"
+                title={s}
+              >
+                {s}
+              </button>
+            ))}
+            <button
+              onClick={() => setRefineSuggestions([])}
+              className="text-xs text-gray-400 hover:text-gray-600 px-1"
+            >
+              ✕
+            </button>
           </div>
         )}
 

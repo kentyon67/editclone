@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, Store, Copy, CheckCircle, Loader2,
-  Star, ChevronDown, ChevronUp,
+  Star, ChevronDown, ChevronUp, Search, X,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -259,13 +259,14 @@ export default function MarketplacePage() {
   const [profiles, setProfiles] = useState<PublicStyleProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [copiedIds, setCopiedIds] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async (tag?: string) => {
+  const load = useCallback(async (tag?: string, q?: string) => {
     setLoading(true);
     try {
-      const { profiles: data } = await listMarketplaceProfiles(tag || undefined);
+      const { profiles: data } = await listMarketplaceProfiles(tag || undefined, q || undefined);
       setProfiles(data);
     } finally {
       setLoading(false);
@@ -273,8 +274,11 @@ export default function MarketplacePage() {
   }, []);
 
   useEffect(() => {
-    load(activeTag ?? undefined);
-  }, [activeTag, load]);
+    const timer = setTimeout(() => {
+      load(activeTag ?? undefined, searchQuery || undefined);
+    }, searchQuery ? 400 : 0);
+    return () => clearTimeout(timer);
+  }, [activeTag, searchQuery, load]);
 
   async function handleCopy(profileId: string) {
     if (copyingId || copiedIds.has(profileId)) return;
@@ -310,6 +314,26 @@ export default function MarketplacePage() {
               <p className="text-sm text-gray-500">{t("subtitle")}</p>
             </div>
           </div>
+        </div>
+
+        {/* 検索ボックス */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="プロファイル名・説明・タグで検索..."
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Tag filter */}

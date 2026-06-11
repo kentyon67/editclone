@@ -188,6 +188,25 @@ export default function UploadPage() {
               </label>
               <span className="text-xs text-purple-400 font-normal">{t("promptOptional")}</span>
             </div>
+            {/* クイックプリセット */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {[
+                "言い淀み・フィラーをカット",
+                "冒頭の挨拶を10秒カット",
+                "Shorts用に縦横比調整・1分以内",
+                "テンポアップ（1.3倍速）",
+                "重要ポイントにマーカーを追加",
+              ].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setPrompt((p) => p ? `${p}、${preset}` : preset)}
+                  className="text-xs px-2.5 py-1 rounded-full border border-purple-200 bg-white text-purple-600 hover:bg-purple-50 transition-colors"
+                >
+                  + {preset}
+                </button>
+              ))}
+            </div>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

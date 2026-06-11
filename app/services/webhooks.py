@@ -123,9 +123,15 @@ def _deliver(url: str, secret: str, event: str, payload: dict) -> None:
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if resp.status >= 400:
-                logger.warning("Webhook %s delivery failed: HTTP %s", url, resp.status)
-    except Exception as e:
-        logger.warning("Webhook %s delivery error: %s", url, e)
+    # 指数バックオフで最大3回リトライ (1s, 2s, 4s)
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                if resp.status < 400:
+                    return  # 成功
+                logger.warning("Webhook %s delivery failed: HTTP %s (attempt %d)", url, resp.status, attempt + 1)
+        except Exception as e:
+            logger.warning("Webhook %s delivery error: %s (attempt %d)", url, e, attempt + 1)
+        if attempt < 2:
+            import time
+            time.sleep(2 ** attempt)  # 1s, 2s

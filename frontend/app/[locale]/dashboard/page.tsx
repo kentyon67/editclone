@@ -9,7 +9,7 @@ import {
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import {
-  getUserUsage, getUserJobs, listProjects,
+  getUserUsage, getUserJobs, listProjects, getJobThumbnailUrl,
   type UsageResponse, type UserJob, type Project,
 } from "@/lib/api";
 import { setPluginMode, type PluginNLE } from "@/lib/plugin";
@@ -221,8 +221,22 @@ export default function DashboardPage() {
                       href={`/${locale}/results/${job.job_id}`}
                       className="flex items-center gap-3 min-w-0 flex-1"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center flex-shrink-0">
-                        <Film className="w-5 h-5 text-purple-500" />
+                      <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-purple-100 to-blue-100">
+                        {job.status === "completed" ? (
+                          <img
+                            src={getJobThumbnailUrl(job.job_id)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const el = e.currentTarget as HTMLImageElement;
+                              el.style.display = "none";
+                              el.nextElementSibling?.classList.remove("hidden");
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-full h-full flex items-center justify-center ${job.status === "completed" ? "hidden" : ""}`}>
+                          <Film className="w-5 h-5 text-purple-500" />
+                        </div>
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-gray-900 truncate text-sm">
