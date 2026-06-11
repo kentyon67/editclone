@@ -221,6 +221,9 @@ def cuts_to_keep_segments(cuts: list, total_duration: float) -> list:
         cursor = max(cursor, e)
     if total_duration > 0 and cursor < total_duration - 0.05:
         kept.append({"start": round(cursor, 3), "end": round(total_duration, 3)})
+    # 全区間がカット対象の場合はフル動画をそのまま使用
+    if not kept and total_duration > 0:
+        kept = [{"start": 0.0, "end": round(total_duration, 3)}]
     return kept
 
 
@@ -828,8 +831,8 @@ def run_gui():
         edit_status.update_idletasks()
 
     def _run_ai_edit():
-        if not _API_URL or not _API_TOKEN:
-            messagebox.showwarning("設定不足", "設定タブで API URL と Token を入力してください",
+        if not _API_URL:
+            messagebox.showwarning("設定不足", "設定タブで API URL を入力してください\n（ローカルバックエンド: http://127.0.0.1:8001）",
                                    parent=root)
             nb.select(tab_settings)
             return
@@ -871,6 +874,7 @@ def run_gui():
         result_lbl.configure(text="処理中...", fg=MUTED)
 
         def _worker():
+            nonlocal media_clip
             try:
                 video_id = upload_video(file_path, on_progress=_set_est)
                 _set_est("AI処理を開始中...")
@@ -1113,6 +1117,10 @@ def run_gui():
 
     job_sel_cb.bind("<<ComboboxSelected>>", _on_job_sel)
 
+    # チャット入力エリア（expand=True より先に pack して領域を確保する）
+    input_frame = tk.Frame(tab_chat, bg=BG2)
+    input_frame.pack(fill="x", side="bottom", padx=0, pady=0)
+
     # チャット表示エリア
     chat_frame = tk.Frame(tab_chat, bg=BG)
     chat_frame.pack(fill="both", expand=True, padx=6, pady=(4, 0))
@@ -1175,10 +1183,7 @@ def run_gui():
     _append_chat("system", "✓ EditClone チャット準備完了")
     _append_chat("system", "ℹ AI編集タブで動画を処理するか、上のジョブ選択で過去の処理を選んでください")
 
-    # チャット入力エリア
-    input_frame = tk.Frame(tab_chat, bg=BG2)
-    input_frame.pack(fill="x", side="bottom", padx=0, pady=0)
-
+    # チャット入力ウィジェット（input_frame は上部で先行 pack 済み）
     chat_input = tk.Text(
         input_frame,
         height=3,
@@ -1585,13 +1590,14 @@ def run_gui():
         global _API_URL, _API_TOKEN
         url   = url_var.get().strip().rstrip("/")
         token = token_var.get().strip()
-        if not url or not token:
-            set_status.configure(text="URL と Token を両方入力してください", fg=RED)
+        if not url:
+            set_status.configure(text="API URL を入力してください", fg=RED)
             return
         _API_URL = url
         _API_TOKEN = token
         _save_config(url, token)
-        set_status.configure(text="✓ 保存しました", fg=GREEN)
+        note = "（ローカルモード・Token なし）" if not token else ""
+        set_status.configure(text=f"✓ 保存しました {note}", fg=GREEN)
         threading.Thread(target=lambda: (_load_jobs(), _load_styles()), daemon=True).start()
 
     def _test_conn():
@@ -1642,8 +1648,12 @@ def run_gui():
                command=_show_diag).pack(side="left")
 
     tk.Label(tab_settings,
-             text="トークン取得: EditClone Web → アカウント → APIキーを生成",
-             bg=BG, fg=MUTED, font=("Helvetica", 9)).pack(anchor="w", padx=12, pady=(16, 4))
+             text="■ ローカルバックエンド（開発・テスト）\n"
+                  "  URL: http://127.0.0.1:8001  Token: 空白\n\n"
+                  "■ 本番バックエンド\n"
+                  "  URL: https://editclone-production.up.railway.app\n"
+                  "  Token: EditClone Web → アカウント → APIキーを生成 (eck_...)",
+             bg=BG, fg=MUTED, font=("Helvetica", 9), justify="left").pack(anchor="w", padx=12, pady=(16, 4))
     tk.Label(tab_settings, text=f"設定ファイル: {_CONFIG_PATH}",
              bg=BG, fg=BORDER, font=("Helvetica", 8)).pack(anchor="w", padx=12)
 
@@ -1687,7 +1697,7 @@ def run_gui():
 
     def _initial_load():
         time.sleep(0.3)
-        if _API_URL and _API_TOKEN:
+        if _API_URL:
             _load_jobs()
             _load_styles()
         else:
@@ -1707,23 +1717,31 @@ def main():
     global _API_URL, _API_TOKEN
     _API_URL, _API_TOKEN = _load_config()
 
-    if not _API_URL or not _API_TOKEN:
+    if not _API_URL:
         try:
             import tkinter as tk
             from tkinter import simpledialog
             root = tk.Tk()
             root.withdraw()
-            url   = simpledialog.askstring("EditClone 設定",
-                                           "EditClone API URL:",
-                                           initialvalue=_DEFAULT_API_URL,
-                                           parent=root)
-            token = simpledialog.askstring("EditClone 設定",
-                                           "API トークン (eck_...)\nダッシュボード → Account → API Keys で取得",
-                                           parent=root)
+            url = simpledialog.askstring(
+                "EditClone 設定",
+                "EditClone API URL:\n\n"
+                "ローカルバックエンド: http://127.0.0.1:8001\n"
+                "本番バックエンド: https://editclone-production.up.railway.app",
+                initialvalue=_DEFAULT_API_URL,
+                parent=root,
+            )
+            token = simpledialog.askstring(
+                "EditClone 設定",
+                "API トークン (eck_...)\n"
+                "ダッシュボード → Account → API Keys で取得\n\n"
+                "※ ローカルバックエンドでは空白のままOKでも動作します",
+                parent=root,
+            )
             root.destroy()
-            if url and token:
+            if url:
                 _API_URL   = url.strip().rstrip("/")
-                _API_TOKEN = token.strip()
+                _API_TOKEN = (token or "").strip()
                 _save_config(_API_URL, _API_TOKEN)
         except Exception:
             print("[EditClone] 設定ファイルが必要です:", _CONFIG_PATH)
