@@ -3,7 +3,9 @@ import { useTranslations, useLocale } from "next-intl";
 import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import {
-  Dna, Upload, ArrowLeft, Loader2, Film, CheckCircle2, ChevronRight, Scissors, Clock, BarChart2, Mic2,
+  Dna, Upload, ArrowLeft, Loader2, Film, CheckCircle2, ChevronRight,
+  Scissors, Clock, BarChart2, Mic2, Lightbulb, Gauge, Captions, ZoomIn,
+  Shuffle, Type, Volume2, Palette, MapPin, Music, Crop, FileVideo,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -133,6 +135,52 @@ function DnaResultCard({ result }: { result: EditDnaResult }) {
           <p className="text-sm text-gray-800 leading-relaxed">{result.suggested_prompt}</p>
         </div>
       </div>
+
+      {result.detected_operations && result.detected_operations.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-2">検出された編集操作</p>
+          <div className="flex flex-wrap gap-1.5">
+            {result.detected_operations.map((op) => {
+              const opMeta: Record<string, { color: string; label: string }> = {
+                cut: { color: "bg-purple-100 text-purple-700", label: "カット" },
+                trim: { color: "bg-purple-100 text-purple-600", label: "トリム" },
+                speed: { color: "bg-blue-100 text-blue-700", label: "速度変更" },
+                subtitle: { color: "bg-green-100 text-green-700", label: "字幕" },
+                zoom: { color: "bg-cyan-100 text-cyan-700", label: "ズーム" },
+                transition: { color: "bg-indigo-100 text-indigo-700", label: "トランジション" },
+                text: { color: "bg-yellow-100 text-yellow-700", label: "テキスト" },
+                audio: { color: "bg-orange-100 text-orange-700", label: "音量調整" },
+                color: { color: "bg-pink-100 text-pink-700", label: "カラー補正" },
+                marker: { color: "bg-red-100 text-red-700", label: "マーカー" },
+                bgm: { color: "bg-teal-100 text-teal-700", label: "BGM" },
+              };
+              const meta = opMeta[op] ?? { color: "bg-gray-100 text-gray-700", label: op };
+              return (
+                <span key={op} className={`text-xs px-2 py-0.5 rounded-full font-medium ${meta.color}`}>
+                  {meta.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {result.style_insights && result.style_insights.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+            <p className="text-xs font-semibold text-amber-700">AI スタイル分析</p>
+          </div>
+          <ul className="space-y-1">
+            {result.style_insights.map((insight, i) => (
+              <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                <span className="text-amber-400 mt-0.5 flex-shrink-0">•</span>
+                {insight}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

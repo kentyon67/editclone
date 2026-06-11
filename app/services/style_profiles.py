@@ -482,7 +482,7 @@ def copy_public_profile(source_id: str, user_id: str, new_name: str = "") -> Opt
 
 
 def ai_refine_profile(profile_id: str, user_id: str) -> str:
-    """フィードバック履歴と参考動画をもとに Claude がプロンプト改善を提案する。"""
+    """フィードバック履歴・参考動画・プロンプトパターンをもとに Claude がプロンプト改善を提案する。"""
     import os
 
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -510,6 +510,14 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
     # このプロファイルに紐づく参考動画
     ref_videos = list_reference_videos(profile_id, user_id)
 
+    # プロンプトパターン（チャット編集で蓄積したプロンプト→操作タイプのマッピング）
+    prompt_patterns: list[dict] = []
+    if isinstance(profile.get("prompt_patterns"), list):
+        # 使用回数の多い順・上位15件
+        prompt_patterns = sorted(
+            profile["prompt_patterns"], key=lambda p: p.get("count", 1), reverse=True
+        )[:15]
+
     current_prompt = (profile.get("default_prompt") or "").strip()
 
     # Claude へのコンテキスト構築
@@ -518,11 +526,24 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
         "- " + action_labels.get(f.get("action", ""), f.get("action", ""))
         + (f": {f['notes'].strip()}" if f.get("notes", "").strip() else "")
         for f in feedback_data
+        if not str(f.get("notes", "")).startswith("auto:")  # 自動記録は除外
     ]
     ref_lines = [
         f"- {v.get('oembed_title') or v.get('url')} ({v.get('oembed_provider') or 'unknown'})"
         for v in ref_videos
     ]
+
+    op_label_map = {
+        "cut": "カット", "trim": "トリム", "speed": "速度変更", "subtitle": "字幕",
+        "zoom": "ズーム", "transition": "トランジション", "text": "テキスト",
+        "audio": "音量", "color": "カラー", "marker": "マーカー", "bgm": "BGM",
+    }
+    pattern_lines = []
+    for p in prompt_patterns:
+        ops = [op_label_map.get(t, t) for t in (p.get("operation_types") or [])]
+        ops_str = "・".join(ops) if ops else "不明"
+        count = p.get("count", 1)
+        pattern_lines.append(f'- 「{p.get("prompt", "")}」→ [{ops_str}]（{count}回使用）')
 
     system_prompt = (
         "あなたは動画編集AIアシスタントです。\n"
@@ -531,6 +552,7 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
         "- 改善されたプロンプト本文のみを出力すること\n"
         "- 1〜3文の日本語で簡潔に\n"
         "- 前置きや説明は一切不要\n"
+        "- プロンプトパターンに頻出する操作タイプを優先して組み込むこと\n"
         "- 例: 「冒頭の挨拶をカットしてください。言い淀み（えーと、あの）も削除してください。」"
     )
 
@@ -538,9 +560,11 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
         f"## 現在のプロンプト\n{current_prompt or '（未設定）'}\n\n"
         "## 参考動画（目標の編集スタイル）\n"
         + ("\n".join(ref_lines) if ref_lines else "（未設定）") + "\n\n"
+        + "## よく使うチャット編集指示（実績データ）\n"
+        + ("\n".join(pattern_lines) if pattern_lines else "（データなし）") + "\n\n"
         + "## 過去のフィードバック（最新順）\n"
         + ("\n".join(feedback_lines) if feedback_lines else "（フィードバックなし）") + "\n\n"
-        + "上記をもとに、改善されたプロンプトを提案してください。"
+        + "上記のチャット編集パターンとフィードバックをもとに、より精度の高い改善されたプロンプトを提案してください。"
     )
 
     try:

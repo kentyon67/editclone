@@ -505,6 +505,8 @@ export interface EditDnaResult {
   suggested_noise_db: number;
   suggested_min_silence: number;
   suggested_prompt: string;
+  style_insights: string[];
+  detected_operations: string[];
 }
 
 export async function analyzeEditPair(

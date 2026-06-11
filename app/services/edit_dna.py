@@ -5,9 +5,11 @@ before: 未編集の元動画
 after:  ユーザーが編集済みの完成動画
 
 差分を解析し、カットパターン・テンポ・無音閾値を推定して Style Profile 推奨値を返す。
+Whisper トランスクリプト + Claude API で詳細なスタイル分析を行う。
 """
 import json
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -78,6 +80,83 @@ def _best_silence_params(video_path: Path) -> tuple[float, list[dict]]:
     return -30.0, _detect_silence(video_path, -30.0)
 
 
+def _transcribe_brief(video_path: Path) -> str:
+    """動画を文字起こしして先頭 2000 文字を返す。Whisper が使えない場合は空文字列。"""
+    try:
+        from app.services.transcription import transcribe_video
+        result = transcribe_video(video_path)
+        segs = result.get("segments") or []
+        lines = [f"{s.get('start', 0):.1f}s: {s.get('text', '').strip()}" for s in segs[:60]]
+        return "\n".join(lines)[:2000]
+    except Exception as e:
+        logger.debug("transcribe_brief failed: %s", e)
+        return ""
+
+
+def _claude_analyze(
+    before_transcript: str,
+    after_transcript: str,
+    before_dur: float,
+    after_dur: float,
+    removed_ratio: float,
+    cuts_per_minute: float,
+    avg_segment: float,
+    base_prompt: str,
+) -> dict:
+    """
+    Claude API でトランスクリプト差分を分析して詳細なスタイルインサイトを返す。
+    Returns: {"suggested_prompt": str, "style_insights": list[str], "detected_operations": list[str]}
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {"suggested_prompt": base_prompt, "style_insights": [], "detected_operations": []}
+
+    system = (
+        "あなたは動画編集スタイル分析AIです。\n"
+        "編集前後の動画トランスクリプトと統計情報を分析して、編集スタイルの特徴を抽出します。\n\n"
+        "必ず以下の JSON 形式のみを返してください（前後の説明不要）:\n"
+        '{"suggested_prompt": "1〜3文の編集指示", "style_insights": ["洞察1", "洞察2", ...], '
+        '"detected_operations": ["cut", "trim", "speed", "subtitle", "zoom", "transition", "text", "audio", "color", "marker"]}\n\n'
+        "detected_operations は元動画と編集後動画の差分から推定できる操作タイプを列挙する。\n"
+        "style_insights は最大5つ。日本語で具体的に。"
+    )
+
+    before_section = f"=== 元動画トランスクリプト（先頭） ===\n{before_transcript}" if before_transcript else "（文字起こし不可）"
+    after_section = f"=== 編集後トランスクリプト（先頭） ===\n{after_transcript}" if after_transcript else "（文字起こし不可）"
+
+    user_msg = (
+        f"元動画: {before_dur:.1f}秒 → 編集後: {after_dur:.1f}秒\n"
+        f"削除率: {removed_ratio * 100:.1f}%  カット数/分: {cuts_per_minute}  平均セグメント: {avg_segment}秒\n\n"
+        f"{before_section}\n\n"
+        f"{after_section}\n\n"
+        "上記の情報から編集スタイルを分析してください。"
+    )
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=system,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        text = resp.content[0].text.strip()
+        import re
+        m = re.search(r'\{.*\}', text, re.DOTALL)
+        if m:
+            data = json.loads(m.group())
+            return {
+                "suggested_prompt": str(data.get("suggested_prompt") or base_prompt),
+                "style_insights": [str(s) for s in (data.get("style_insights") or [])],
+                "detected_operations": [str(o) for o in (data.get("detected_operations") or [])],
+            }
+    except Exception as e:
+        logger.debug("claude_analyze failed: %s", e)
+
+    return {"suggested_prompt": base_prompt, "style_insights": [], "detected_operations": []}
+
+
 def analyze_edit_pair(before_path: Path, after_path: Path) -> dict:
     """
     編集前後ペアを分析して編集スタイル DNA を返す。
@@ -86,7 +165,8 @@ def analyze_edit_pair(before_path: Path, after_path: Path) -> dict:
         before_duration, after_duration, removed_ratio,
         cuts_per_minute, avg_segment_seconds,
         silence_count, detected_noise_db,
-        suggested_noise_db, suggested_min_silence, suggested_prompt
+        suggested_noise_db, suggested_min_silence, suggested_prompt,
+        style_insights (list[str]), detected_operations (list[str])
     """
     before_dur = _get_duration(before_path)
     after_dur = _get_duration(after_path)
@@ -129,7 +209,7 @@ def analyze_edit_pair(before_path: Path, after_path: Path) -> dict:
 
     suggested_noise_db = best_noise_db
 
-    # 編集パターンからプロンプトを自動生成
+    # 統計から基本プロンプトを自動生成（Claude API が使えない場合のフォールバック）
     parts: list[str] = []
     if removed_ratio > 0.35:
         parts.append("冒頭の挨拶とアウトロをカットしてください")
@@ -141,7 +221,32 @@ def analyze_edit_pair(before_path: Path, after_path: Path) -> dict:
         parts.append("大きな間だけをカットして話の流れを保持してください")
     if not parts:
         parts.append("無音部分をカットしてください")
-    suggested_prompt = "。".join(parts) + "。"
+    base_prompt = "。".join(parts) + "。"
+
+    # Whisper で両動画を文字起こし（非同期で並列実行）
+    before_transcript = ""
+    after_transcript = ""
+    try:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f_before = ex.submit(_transcribe_brief, before_path)
+            f_after = ex.submit(_transcribe_brief, after_path)
+            before_transcript = f_before.result(timeout=120)
+            after_transcript = f_after.result(timeout=120)
+    except Exception as e:
+        logger.debug("parallel transcription failed: %s", e)
+
+    # Claude API で詳細分析
+    ai_result = _claude_analyze(
+        before_transcript=before_transcript,
+        after_transcript=after_transcript,
+        before_dur=before_dur,
+        after_dur=after_dur,
+        removed_ratio=removed_ratio,
+        cuts_per_minute=cuts_per_minute,
+        avg_segment=avg_segment,
+        base_prompt=base_prompt,
+    )
 
     return {
         "before_duration": round(before_dur, 2),
@@ -154,5 +259,7 @@ def analyze_edit_pair(before_path: Path, after_path: Path) -> dict:
         "detected_noise_db": best_noise_db,
         "suggested_noise_db": suggested_noise_db,
         "suggested_min_silence": suggested_min_silence,
-        "suggested_prompt": suggested_prompt,
+        "suggested_prompt": ai_result["suggested_prompt"],
+        "style_insights": ai_result["style_insights"],
+        "detected_operations": ai_result["detected_operations"],
     }
