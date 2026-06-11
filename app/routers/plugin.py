@@ -184,6 +184,17 @@ def plugin_job_details(job_id: str, user: dict = Depends(require_user)):
     }
 
 
+@router.get("/jobs/{job_id}/chat-history")
+def plugin_chat_history(job_id: str, user: dict = Depends(require_user)):
+    """
+    Web アプリでのチャット編集履歴を返す。
+    Plugin はこれを読み込んでチャットタブに Web の会話を引き継ぎ表示する。
+    """
+    from app.services.jobs import get_chat_history
+    messages = get_chat_history(job_id, user["id"])
+    return {"job_id": job_id, "messages": messages}
+
+
 @router.post("/jobs/{job_id}/agent-edit")
 def plugin_agent_edit(
     job_id: str,

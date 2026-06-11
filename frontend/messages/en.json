@@ -339,7 +339,10 @@
       "urlPlaceholder": "YouTube or Vimeo URL",
       "adding": "Adding...",
       "empty": "No reference videos yet",
-      "unsupportedError": "Only YouTube and Vimeo URLs are supported."
+      "unsupportedError": "Only YouTube and Vimeo URLs are supported.",
+      "orUpload": "or",
+      "uploadFile": "Upload your own video (mp4/mov)",
+      "uploading": "Analyzing with AI..."
     },
     "feedback": {
       "title": "How was this edit?",

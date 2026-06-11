@@ -471,9 +471,70 @@ def apply_single_operation(resolve, op: dict, job_ctx: dict, source_clip) -> tup
     # ── BGM ───────────────────────────────────────────────
     if op_type == "bgm":
         mood = op.get("mood", "")
+        mood_tips = {
+            "upbeat":   "テンポ120bpm以上・明るい曲",
+            "calm":     "テンポ70〜90bpm・穏やかな曲",
+            "dramatic": "オーケストラ or 映画的な曲",
+            "happy":    "ポップ・明るい曲",
+            "sad":      "ピアノソロ・センチメンタルな曲",
+        }
+        tip = mood_tips.get(mood, "")
+
+        # tkinter ファイルダイアログで音楽ファイルを選択してタイムラインに挿入
+        try:
+            import tkinter as _tk
+            from tkinter import filedialog as _fd
+            _tmp_root = None
+            try:
+                _tmp_root = _tk.Tk()
+                _tmp_root.withdraw()
+                audio_path = _fd.askopenfilename(
+                    title=f"BGM ファイルを選択 ({mood})",
+                    filetypes=[
+                        ("音声ファイル", "*.mp3 *.wav *.aac *.m4a *.flac *.ogg"),
+                        ("すべて", "*.*"),
+                    ],
+                )
+            finally:
+                if _tmp_root:
+                    _tmp_root.destroy()
+
+            if audio_path:
+                project = resolve.GetProjectManager().GetCurrentProject() if resolve else None
+                if project:
+                    mp = project.GetMediaPool()
+                    clips = mp.ImportMedia([audio_path])
+                    if clips:
+                        tl = _get_current_timeline(resolve)
+                        if tl:
+                            # オーディオトラック 2 に追加（1 はボイス用として確保）
+                            try:
+                                audio_cnt = tl.GetTrackCount("audio")
+                                if audio_cnt < 2:
+                                    mp.CreateEmptyTimeline("BGM_Track")
+                                tl.AppendToTimeline([{
+                                    "mediaPoolItem": clips[0],
+                                    "mediaType": 2,  # Audio only
+                                    "trackIndex": min(2, audio_cnt),
+                                }])
+                                return "✓", f"BGM をタイムラインに追加しました: {Path(audio_path).name}\nFairlight で音量を -20〜-15dB に調整してください"
+                            except Exception:
+                                pass
+                        return "✓", f"BGM をメディアプールにインポートしました: {Path(audio_path).name}\nFairlight ページのオーディオトラックにドラッグしてください"
+                return "⚠", f"BGM ファイル選択済み ({Path(audio_path).name})\nDaVinci 未接続 — Fairlight でインポートしてください"
+            # キャンセルされた場合
+            return "⚠", (
+                f"BGM({mood}): ファイル選択がキャンセルされました\n"
+                f"{'推奨スタイル: ' + tip if tip else ''}\n"
+                "著作権フリー: YouTube Audio Library / Pixabay Music"
+            )
+        except Exception:
+            pass
+
         return "⚠", (
-            f"BGM({mood}): 著作権フリー音楽を検索して追加してください\n"
-            "推奨: YouTube Audio Library / Pixabay Music\n"
+            f"BGM({mood}): 著作権フリー音楽を選択して追加してください\n"
+            + (f"推奨スタイル: {tip}\n" if tip else "")
+            + "推奨: YouTube Audio Library / Pixabay Music\n"
             "Fairlight ページのオーディオトラックにドラッグ → 音量 -20〜-15dB"
         )
 
@@ -1140,7 +1201,7 @@ def run_gui():
         except Exception:
             pass
 
-        # バックグラウンドで詳細を取得（srt_available・cuts・project_id を正確にセット）
+        # バックグラウンドで詳細 + Web チャット履歴を取得
         def _fetch_details():
             try:
                 det = api_get(f"/plugin/jobs/{job_id}/details")
@@ -1155,6 +1216,30 @@ def run_gui():
                 _append_chat("system", f"ℹ 詳細読み込み完了 — 字幕: {'あり' if srt_ok else 'なし'}")
             except Exception:
                 pass
+
+            # Web チャット履歴を引き継ぐ（あれば表示）
+            try:
+                hist_data = api_get(f"/plugin/jobs/{job_id}/chat-history")
+                if _state.get("job_id") != job_id:
+                    return
+                web_msgs = hist_data.get("messages") or []
+                if web_msgs:
+                    _append_chat("system", f"── Web での編集履歴 ({len(web_msgs)} 件) ──")
+                    for m in web_msgs[-10:]:  # 最新10件のみ表示
+                        role = m.get("role", "")
+                        content = m.get("content", "")
+                        op_types = m.get("op_types") or []
+                        ops_str = f"  [{', '.join(op_types)}]" if op_types else ""
+                        if role in ("user", "assistant"):
+                            _append_chat(role, content + ops_str)
+                    _append_chat("system", "── 引き続きここから編集できます ──")
+                    # Web 履歴を _chat_history にも追記して文脈として使用
+                    for m in web_msgs[-6:]:
+                        if m.get("role") in ("user", "assistant"):
+                            _chat_history.append({"role": m["role"], "content": m.get("content", "")})
+            except Exception:
+                pass
+
         threading.Thread(target=_fetch_details, daemon=True).start()
 
     job_sel_cb.bind("<<ComboboxSelected>>", _on_job_sel)

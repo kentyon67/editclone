@@ -712,6 +712,17 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
         except Exception as e:
             logger.warning("refine MP4 render failed: %s", e)
 
+    # Web チャット履歴を Supabase に保存（Plugin が引き継ぎ可能にする）
+    try:
+        op_types = [op.get("type", "") for op in operations if op.get("type") and op.get("type") != "error"]
+        synthesis = "、".join(
+            op.get("description", op.get("type", "")) for op in operations[:5] if op.get("type") != "error"
+        ) or "（操作なし）"
+        save_chat_message(job_id, "user", prompt, op_types)
+        save_chat_message(job_id, "assistant", synthesis, op_types)
+    except Exception:
+        pass
+
     # フィードバック記録 + プロンプトパターン学習（Web refine も学習ループに組み込む）
     try:
         from app.services.style_profiles import get_active_profile, record_feedback, record_prompt_pattern
@@ -747,6 +758,49 @@ def refine_job(job_id: str, prompt: str, user_id: str) -> dict:
             op.get("type") in ("speed", "transition", "text", "color") for op in operations
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Web チャット履歴の永続化（Web→Plugin 引き継ぎ）
+# ---------------------------------------------------------------------------
+
+def save_chat_message(job_id: str, role: str, content: str, op_types: list[str] | None = None) -> None:
+    """
+    Web リファイン時のチャットメッセージを Supabase の result_metadata に追記する。
+    Plugin はこれを読み込んで Web での編集履歴を引き継げる。
+    """
+    from app.services.storage import USE_CLOUD
+    if not USE_CLOUD:
+        return
+    try:
+        from app.services.storage import _client
+        from datetime import datetime, timezone
+        resp = _client().table("jobs").select("result_metadata").eq("id", job_id).limit(1).execute()
+        if not resp.data:
+            return
+        metadata: dict = resp.data[0].get("result_metadata") or {}
+        messages: list = metadata.get("chat_messages") or []
+        entry: dict = {
+            "role": role,
+            "content": content,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        if op_types:
+            entry["op_types"] = op_types
+        messages.append(entry)
+        metadata["chat_messages"] = messages[-100:]  # 最大100件保持
+        _client().table("jobs").update({"result_metadata": metadata}).eq("id", job_id).execute()
+    except Exception as e:
+        logger.debug("save_chat_message failed: %s", e)
+
+
+def get_chat_history(job_id: str, user_id: str) -> list[dict]:
+    """Web チャット履歴を返す（Plugin 用）。"""
+    job = get_job(job_id)
+    if not job or job.user_id != user_id:
+        return []
+    result = job.result or {}
+    return (result.get("chat_messages") or [])[-50:]
 
 
 def _keep_segments_to_cuts(keep_segs: list[dict], total_duration: float) -> list[dict]:

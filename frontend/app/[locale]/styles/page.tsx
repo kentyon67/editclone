@@ -5,14 +5,14 @@ import Link from "next/link";
 import {
   Sparkles, Plus, Check, Pencil, Trash2, ChevronRight,
   Loader2, X, Wand2, Film, ChevronDown, BrainCircuit, Type, Dna, Store,
-  Globe, EyeOff, TrendingUp,
+  Globe, EyeOff, TrendingUp, Upload,
 } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import {
   listStyleProfiles, createStyleProfile, updateStyleProfile,
   deleteStyleProfile, activateStyleProfile,
-  listReferenceVideos, addReferenceVideo, deleteReferenceVideo,
+  listReferenceVideos, addReferenceVideo, deleteReferenceVideo, uploadReferenceVideo,
   aiRefineProfile, getProfileStats,
   publishStyleProfile, unpublishStyleProfile,
   getProfileAccuracy,
@@ -309,6 +309,7 @@ function ReferenceVideoSection({ profileId }: { profileId: string }) {
   const [loading, setLoading] = useState(false);
   const [url, setUrl] = useState("");
   const [adding, setAdding] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [error, setError] = useState("");
 
   async function load() {
@@ -343,6 +344,22 @@ function ReferenceVideoSection({ profileId }: { profileId: string }) {
   async function handleDelete(videoId: string) {
     await deleteReferenceVideo(profileId, videoId);
     setVideos((prev) => prev.filter((v) => v.id !== videoId));
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || uploadingFile) return;
+    e.target.value = "";
+    setUploadingFile(true);
+    setError("");
+    try {
+      const v = await uploadReferenceVideo(profileId, file);
+      setVideos((prev) => [...prev, v]);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("unsupportedError"));
+    } finally {
+      setUploadingFile(false);
+    }
   }
 
   return (
@@ -417,6 +434,27 @@ function ReferenceVideoSection({ profileId }: { profileId: string }) {
               {t("add")}
             </button>
           </form>
+
+          <div className="flex items-center gap-2 pt-0.5">
+            <div className="flex-1 h-px bg-gray-100" />
+            <span className="text-xs text-gray-300">{t("orUpload")}</span>
+            <div className="flex-1 h-px bg-gray-100" />
+          </div>
+
+          <label className={`flex items-center justify-center gap-1.5 w-full py-1.5 border border-dashed border-gray-200 rounded-xl text-xs cursor-pointer transition-colors ${uploadingFile ? "opacity-50 cursor-not-allowed" : "hover:border-purple-400 hover:text-purple-600 text-gray-400"}`}>
+            {uploadingFile ? (
+              <><Loader2 className="w-3 h-3 animate-spin" />{t("uploading")}</>
+            ) : (
+              <><Upload className="w-3 h-3" />{t("uploadFile")}</>
+            )}
+            <input
+              type="file"
+              accept=".mp4,.mov,.m4v"
+              className="hidden"
+              disabled={uploadingFile}
+              onChange={handleFileUpload}
+            />
+          </label>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
         </div>

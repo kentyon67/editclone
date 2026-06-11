@@ -339,7 +339,10 @@
       "urlPlaceholder": "YouTube / Vimeo の URL",
       "adding": "追加中...",
       "empty": "参考動画なし",
-      "unsupportedError": "YouTube / Vimeo のURLのみ対応しています。"
+      "unsupportedError": "YouTube / Vimeo のURLのみ対応しています。",
+      "orUpload": "または",
+      "uploadFile": "自分の動画をアップロード（mp4/mov）",
+      "uploading": "AI分析中..."
     },
     "feedback": {
       "title": "この編集結果はどうでしたか？",

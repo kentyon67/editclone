@@ -143,6 +143,39 @@ def add_ref_video(profile_id: str, body: RefVideoCreate, user: dict = Depends(re
         raise HTTPException(status_code=500, detail=f"参考動画の追加に失敗しました: {e}")
 
 
+_REF_UPLOAD_ALLOWED_EXT = {".mp4", ".mov", ".m4v"}
+
+
+@router.post("/{profile_id}/reference-videos/upload")
+async def upload_ref_video(
+    profile_id: str,
+    file: UploadFile = File(..., description="参考動画ファイル（自身が権利を持つもの）"),
+    user: dict = Depends(require_user),
+):
+    """
+    自身が権利を持つ動画ファイルを参考動画として登録する。
+    Whisper + Claude でスタイルを自動分析してプロファイル学習に活用する。
+    動画ファイル自体は分析後に削除される。
+    """
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _REF_UPLOAD_ALLOWED_EXT:
+        raise HTTPException(status_code=400, detail=f"非対応の拡張子です: {ext}")
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir) / f"ref_{uuid.uuid4().hex[:8]}{ext}"
+        tmp_path.write_bytes(await file.read())
+        try:
+            result = svc.add_reference_video_from_file(
+                profile_id, user["id"], tmp_path, file.filename or "unknown"
+            )
+            return result
+        except PermissionError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"参考動画の登録に失敗しました: {e}")
+
+
 @router.delete("/{profile_id}/reference-videos/{video_id}")
 def delete_ref_video(profile_id: str, video_id: str, user: dict = Depends(require_user)):
     ok = svc.delete_reference_video(video_id, profile_id, user["id"])

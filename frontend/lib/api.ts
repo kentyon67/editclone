@@ -380,6 +380,8 @@ export interface ReferenceVideo {
   oembed_title: string | null;
   oembed_thumbnail_url: string | null;
   oembed_provider: string | null;
+  analysis_summary: string | null;
+  transcript_preview: string | null;
   created_at: string;
 }
 
@@ -398,6 +400,19 @@ export async function addReferenceVideo(profileId: string, url: string): Promise
     body: JSON.stringify({ url }),
   });
   if (!res.ok) return handleError(res, "Add reference video failed");
+  return res.json();
+}
+
+export async function uploadReferenceVideo(profileId: string, file: File): Promise<ReferenceVideo> {
+  const form = new FormData();
+  form.append("file", file);
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/style-profiles/${profileId}/reference-videos/upload`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+  if (!res.ok) return handleError(res, "Upload reference video failed");
   return res.json();
 }
 

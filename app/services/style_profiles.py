@@ -345,6 +345,72 @@ def add_reference_video(profile_id: str, user_id: str, url: str) -> dict:
     return resp.data[0]
 
 
+def add_reference_video_from_file(
+    profile_id: str,
+    user_id: str,
+    file_path,  # Path object to an uploaded temp file
+    original_filename: str,
+) -> dict:
+    """
+    ユーザーが自身で権利を持つ動画ファイルを参考動画として登録する。
+    Whisper で文字起こし + Claude でスタイル分析してインサイトを保存する。
+    動画ファイル自体はサーバーに保存しない（分析後に削除）。
+    """
+    if not get_profile(profile_id, user_id):
+        raise PermissionError("プロファイルが見つかりません")
+
+    # Whisper 文字起こし（失敗しても続行）
+    transcript_text = ""
+    transcript_preview = ""
+    try:
+        from app.services.transcription import transcribe_video
+        result = transcribe_video(file_path)
+        segs = result.get("segments") or []
+        lines = [f"{s.get('start', 0):.1f}s: {s.get('text', '').strip()}" for s in segs[:60]]
+        transcript_preview = "\n".join(lines)[:2000]
+        transcript_text = (result.get("transcript") or "")[:500]
+    except Exception as e:
+        logger.debug("transcription failed for ref video: %s", e)
+
+    # Claude でスタイルインサイトを生成
+    analysis_summary = ""
+    try:
+        import os, anthropic as _ant
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if api_key and transcript_preview:
+            client = _ant.Anthropic(api_key=api_key)
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=300,
+                system=(
+                    "あなたは動画編集スタイル分析AIです。\n"
+                    "トランスクリプトから動画の編集スタイル・テンポ・特徴を3つ以内で箇条書きにしてください。\n"
+                    "日本語で簡潔に。前置き不要。"
+                ),
+                messages=[{
+                    "role": "user",
+                    "content": f"ファイル名: {original_filename}\n\n=== トランスクリプト ===\n{transcript_preview}",
+                }],
+            )
+            analysis_summary = resp.content[0].text.strip()
+    except Exception as e:
+        logger.debug("claude analysis failed for ref video: %s", e)
+
+    resp = _client().table("reference_videos").insert({
+        "user_id": user_id,
+        "style_profile_id": profile_id,
+        "url": f"file://{original_filename}",
+        "oembed_title": original_filename,
+        "oembed_thumbnail_url": None,
+        "oembed_provider": "upload",
+        "analysis_summary": analysis_summary or None,
+        "transcript_preview": transcript_text or None,
+    }).execute()
+    if not resp.data:
+        raise RuntimeError("参考動画の保存に失敗しました")
+    return resp.data[0]
+
+
 def delete_reference_video(video_id: str, profile_id: str, user_id: str) -> bool:
     try:
         _client().table("reference_videos").delete().eq("id", video_id).eq("style_profile_id", profile_id).eq("user_id", user_id).execute()
@@ -528,10 +594,15 @@ def ai_refine_profile(profile_id: str, user_id: str) -> str:
         for f in feedback_data
         if not str(f.get("notes", "")).startswith("auto:")  # 自動記録は除外
     ]
-    ref_lines = [
-        f"- {v.get('oembed_title') or v.get('url')} ({v.get('oembed_provider') or 'unknown'})"
-        for v in ref_videos
-    ]
+    ref_lines = []
+    for v in ref_videos:
+        title = v.get("oembed_title") or v.get("url") or ""
+        provider = v.get("oembed_provider") or "unknown"
+        summary = v.get("analysis_summary", "")
+        line = f"- {title} ({provider})"
+        if summary:
+            line += f"\n  分析: {summary}"
+        ref_lines.append(line)
 
     op_label_map = {
         "cut": "カット", "trim": "トリム", "speed": "速度変更", "subtitle": "字幕",
